@@ -16,7 +16,7 @@
 #include <parser.h>
 
 void print_help(char *progName) {
-	std::cerr << "Usage: " << progName << " [-v] [-g 0|1] [-O 0|1|2] [-s] [-l] [-i] SOURCE" << std::endl;
+	std::cerr << "Usage: " << progName << " [-v] [-g 0|1] [-O 0|1|2] [-s] [-l] [-i] [-p] SOURCE" << std::endl;
 	return;
 }
 
@@ -24,10 +24,11 @@ int main(
 	int argc,
 	char **argv
 ) {
-	auto enable_code_generator = true;
-	auto spill_only = false;
-	auto interference_only = false;
-	auto liveness_only = false;
+	bool enable_code_generator = true;
+	bool spill_only = false;
+	bool interference_only = false;
+	bool liveness_only = false;
+	bool show_parse_tree = false;
 	int32_t optLevel = 3;
 
 	/*
@@ -40,7 +41,7 @@ int main(
 	}
 	int32_t opt;
 	int64_t functionNumber = -1;
-	while ((opt = getopt(argc, argv, "vg:O:sli")) != -1) {
+	while ((opt = getopt(argc, argv, "vg:O:slip")) != -1) {
 		switch (opt) {
 			case 'l':
 				liveness_only = true;
@@ -59,6 +60,9 @@ int main(
 				break;
 			case 'v':
 				verbose = true;
+				break;
+			case 'p':
+				show_parse_tree = true;
 				break;
 			default:
 				print_help(argv[0]);
@@ -81,7 +85,7 @@ int main(
 		p = L2::parse_function_file(argv[optind]);
 	} else {
 		// Parse the L2 program.
-		p = L2::parse_file(argv[optind]);
+		p = L2::parse_file(argv[optind], show_parse_tree);
 	}
 
 	/*
