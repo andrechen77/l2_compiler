@@ -3,3 +3,5 @@ bin
 tests
 old_src
 *.o
+*.svg
+*.txt

@@ -28,7 +28,6 @@ namespace L2 {
 	// TODO add comment explaining the visitor-with-dispatcher pattern
 
 	struct ParseNode;
-	struct ParseNodeVisitor;
 
 	struct ParseNodeVisitor {
 		virtual void visit_name(ParseNode &n) = 0;
@@ -126,6 +125,10 @@ namespace L2 {
 			};
 		}
 
+		void accept_visitor(ParseNodeVisitor &v) {
+			this->dispatcher->dispatch(v, *this);
+		}
+
 		// methods used to display the parse tree
 
 		bool has_content() const noexcept {
@@ -133,7 +136,6 @@ namespace L2 {
 		}
 
 		bool is_root() const noexcept {
-			// TODO what exactly is different about the root node?
 			return static_cast<bool>(this->dispatcher);
 		}
 	};
@@ -149,13 +151,13 @@ namespace L2 {
 	> {};
 
 	struct ParseTreeProcessor : ParseNodeVisitor {
-		virtual void visit_name(ParseNode *x) {
+		virtual void visit_name(ParseNode &x) override {
 			std::cout << "parser is visiting a NAME\n";
 		}
-		virtual void visit_number(ParseNode *x) {
+		virtual void visit_number(ParseNode &x) override {
 			std::cout << "parser is visiting a NUMBER\n";
 		}
-		virtual void visit_program(ParseNode *x) {
+		virtual void visit_program(ParseNode &x) override {
 			std::cout << "parser is visiting ENTRY POINT\n";
 		}
 	};
@@ -182,17 +184,9 @@ namespace L2 {
 				parse_tree::print_dot(std::cout, *root);
 			}
 
-			// Parser p;
-			// for (auto &child : root->children) {
-			// 	child->accept(&p);
-			// }
+			ParseTreeProcessor processor;
+			root->children[0]->accept_visitor(processor);
 		}
-		// if (root) {
-		// 	return parse_tree(root);
-		// } else {
-		// 	std::cerr << "no prase u bad" << std::endl;
-		// 	exit(1);
-		// }
 		return {};
 	}
 	std::unique_ptr<Program> parse_function_file(char *fileName) {
