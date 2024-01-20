@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <stdint.h>
 #include <assert.h>
+#include <fstream>
 
 #include <tao/pegtl.hpp>
 #include <tao/pegtl/contrib/analyze.hpp>
@@ -168,7 +169,7 @@ namespace L2 {
 	// 	node->accept(&v);
 	// }
 
-	std::unique_ptr<Program> parse_file(char *fileName, bool show_parse_tree) {
+	std::unique_ptr<Program> parse_file(char *fileName, std::optional<std::string> parse_tree_output) {
 		// Check the grammar for some possible issues.
 		// TODO move this to a separate file bc it's performance-intensive
 		if (pegtl::analyze<EntryPointRule>() != 0) {
@@ -180,8 +181,12 @@ namespace L2 {
 		file_input<> fileInput(fileName);
 		auto root = pegtl::parse_tree::parse<EntryPointRule, ParseNode, Selector>(fileInput);
 		if (root) {
-			if (show_parse_tree) {
-				parse_tree::print_dot(std::cout, *root);
+			if (parse_tree_output.has_value()) {
+				std::ofstream output_fstream(*parse_tree_output);
+				if (output_fstream.is_open()) {
+					parse_tree::print_dot(output_fstream, *root);
+					output_fstream.close();
+				}
 			}
 
 			ParseTreeProcessor processor;

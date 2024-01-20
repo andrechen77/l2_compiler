@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <assert.h>
+#include <optional>
 
 #include <parser.h>
 
@@ -28,7 +29,7 @@ int main(
 	bool spill_only = false;
 	bool interference_only = false;
 	bool liveness_only = false;
-	bool show_parse_tree = false;
+	std::optional<std::string> parse_tree_output;
 	int32_t optLevel = 3;
 
 	/*
@@ -41,7 +42,7 @@ int main(
 	}
 	int32_t opt;
 	int64_t functionNumber = -1;
-	while ((opt = getopt(argc, argv, "vg:O:slip")) != -1) {
+	while ((opt = getopt(argc, argv, "vg:O:slip:")) != -1) {
 		switch (opt) {
 			case 'l':
 				liveness_only = true;
@@ -62,7 +63,7 @@ int main(
 				verbose = true;
 				break;
 			case 'p':
-				show_parse_tree = true;
+				parse_tree_output = std::string(optarg);
 				break;
 			default:
 				print_help(argv[0]);
@@ -85,7 +86,7 @@ int main(
 		p = L2::parse_function_file(argv[optind]);
 	} else {
 		// Parse the L2 program.
-		p = L2::parse_file(argv[optind], show_parse_tree);
+		p = L2::parse_file(argv[optind], parse_tree_output);
 	}
 
 	/*
