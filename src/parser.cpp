@@ -25,7 +25,7 @@ namespace pegtl = TAO_PEGTL_NAMESPACE;
 
 using namespace pegtl;
 
-namespace L2 {
+namespace L2::parser {
 	// TODO add comment explaining the visitor-with-dispatcher pattern
 
 	struct ParseNode;
@@ -36,57 +36,69 @@ namespace L2 {
 		virtual void visit_program(ParseNode &n) = 0;
 	};
 
-	struct GrammarRule {
-		GrammarRule() {
-			std::cout << "constructed grammar_rule\n";
-		}
+	namespace rules {
+		struct GrammarRule {
+			GrammarRule() {
+				std::cout << "constructed grammar_rule\n";
+			}
 
-		virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) = 0;
-	};
+			virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) = 0;
+		};
 
-	struct NameRule : GrammarRule, one<'#'> {
-		NameRule() {
-			std::cout << "constructed name\n";
-		}
+		struct NameRule : GrammarRule, one<'#'> {
+			NameRule() {
+				std::cout << "constructed name\n";
+			}
 
-		virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override {
-			v.visit_name(n);
-		}
-	};
+			virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override {
+				v.visit_name(n);
+			}
+		};
 
-	struct NumberRule: GrammarRule, one<'1'> {
-		NumberRule() {
-			std::cout << "constructed number\n";
-		}
+		struct NumberRule: GrammarRule, one<'1'> {
+			NumberRule() {
+				std::cout << "constructed number\n";
+			}
 
-		virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override {
-			v.visit_number(n);
-		}
-	};
+			virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override {
+				v.visit_number(n);
+			}
+		};
 
-	struct ProgramRule : GrammarRule, star<
-		sor<
-			NameRule,
-			NumberRule
-		>
-	> {
-		ProgramRule() {
-			std::cout << "constructed program\n";
-		}
+		struct ProgramRule : GrammarRule, star<
+			sor<
+				NameRule,
+				NumberRule
+			>
+		> {
+			ProgramRule() {
+				std::cout << "constructed program\n";
+			}
 
-		virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override {
-			v.visit_program(n);
-		}
-	};
+			virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override {
+				v.visit_program(n);
+			}
+		};
 
-	struct EntryPointRule : must<ProgramRule> {};
+		struct EntryPointRule : must<ProgramRule> {};
 
-	struct ParseNode /* : pegtl::parse_tree::node */ {
+		template<typename Rule>
+		struct Selector : pegtl::parse_tree::selector<
+			Rule,
+			pegtl::parse_tree::store_content::on<
+				NameRule,
+				NumberRule,
+				ProgramRule
+			>
+		> {};
+	}
+
+	struct ParseNode {
 		// members
 		std::vector<std::unique_ptr<ParseNode>> children;
 		pegtl::internal::inputerator begin;
 		pegtl::internal::inputerator end;
-		std::unique_ptr<GrammarRule> dispatcher;
+		std::unique_ptr<rules::GrammarRule> dispatcher;
 		std::string type;// only used for displaying parse tree
 
 		// special methods
@@ -150,16 +162,6 @@ namespace L2 {
 		}
 	};
 
-	template<typename Rule>
-	struct Selector : pegtl::parse_tree::selector<
-		Rule,
-		pegtl::parse_tree::store_content::on<
-			NameRule,
-			NumberRule,
-			ProgramRule
-		>
-	> {};
-
 	struct ParseTreeProcessor : ParseNodeVisitor {
 		virtual void visit_name(ParseNode &x) override {
 			std::cout << "parser is visiting a NAME\n";
@@ -187,14 +189,14 @@ namespace L2 {
 	std::unique_ptr<Program> parse_file(char *fileName, std::optional<std::string> parse_tree_output) {
 		// Check the grammar for some possible issues.
 		// TODO move this to a separate file bc it's performance-intensive
-		if (pegtl::analyze<EntryPointRule>() != 0) {
+		if (pegtl::analyze<rules::EntryPointRule>() != 0) {
 			std::cerr << "There are problems with the grammar" << std::endl;
 			exit(1);
 		}
 
 		// Parse
 		file_input<> fileInput(fileName);
-		auto root = pegtl::parse_tree::parse<EntryPointRule, ParseNode, Selector>(fileInput);
+		auto root = pegtl::parse_tree::parse<rules::EntryPointRule, ParseNode, rules::Selector>(fileInput);
 		if (root) {
 			if (parse_tree_output.has_value()) {
 				std::ofstream output_fstream(*parse_tree_output);
