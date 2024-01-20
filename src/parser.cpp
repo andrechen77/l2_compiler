@@ -130,6 +130,15 @@ namespace L2 {
 			this->dispatcher->dispatch(v, *this);
 		}
 
+		std::unique_ptr<ParseNode> &operator[](int index) {
+			return this->children.at(index);
+		}
+
+		std::vector<std::unique_ptr<ParseNode>> &get_children() {
+			std::cout << "getting children";
+			return this->children;
+		}
+
 		// methods used to display the parse tree
 
 		bool has_content() const noexcept {
@@ -160,6 +169,12 @@ namespace L2 {
 		}
 		virtual void visit_program(ParseNode &x) override {
 			std::cout << "parser is visiting ENTRY POINT\n";
+			for (auto &child : x.get_children()) {
+				child->accept_visitor(*this);
+			}
+			x[0]->accept_visitor(*this);
+			x[2]->accept_visitor(*this);
+			x[4]->accept_visitor(*this);
 		}
 	};
 
