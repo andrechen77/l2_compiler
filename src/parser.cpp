@@ -58,7 +58,18 @@ namespace L2::parser {
 			virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) = 0;
 		};
 
-		// TODO interleaved class
+		template<typename Result, typename Separator, typename...Rules>
+		struct interleaved_impl;
+		template<typename... Results, typename Separator, typename Rule0, typename... RulesRest>
+		struct interleaved_impl<seq<Results...>, Separator, Rule0, RulesRest...> :
+			interleaved_impl<seq<Results..., Rule0, Separator>, Separator, RulesRest...>
+		{};
+		template<typename... Results, typename Separator, typename Rule0>
+		struct interleaved_impl<seq<Results...>, Separator, Rule0> {
+			using type = seq<Results..., Rule0>;
+		};
+		template<typename Separator, typename... Rules>
+		using interleaved = typename interleaved_impl<seq<>, Separator, Rules...>::type;
 
 		struct str_return : TAO_PEGTL_STRING("return") {};
 		struct str_arrow : TAO_PEGTL_STRING("\x3c-") {};
@@ -329,18 +340,14 @@ namespace L2::parser {
 		*/
 
 		struct ProgramRule : RuleDispatcher,
-			plus<
-				seq<
-					LineSeparatorsWithCommentsRule,
-					bol,
-					SpacesRule,
-					sor<
-						InstructionAssignmentRule,
-						InstructionMemoryReadRule,
-						InstructionReturnRule
-					>,
-					LineSeparatorsWithCommentsRule
-				>
+			// TODO this rule is here just to test the parser for now
+			interleaved<
+				SpacesRule,
+				RegisterRule,
+				RegisterRule,
+				RegisterRule,
+				RegisterRule,
+				RegisterRule
 			>
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_program(n); } };
 
@@ -352,6 +359,7 @@ namespace L2::parser {
 			pegtl::parse_tree::store_content::on<
 				NameRule,
 				NumberRule,
+				RegisterRule,
 				InstructionAssignmentRule,
 				InstructionReturnRule,
 				InstructionMemoryReadRule,
@@ -413,11 +421,6 @@ namespace L2::parser {
 			return this->children.at(index);
 		}
 
-		std::vector<std::unique_ptr<ParseNode>> &get_children() {
-			std::cout << "getting children";
-			return this->children;
-		}
-
 		// methods used to display the parse tree
 
 		bool has_content() const noexcept {
@@ -438,13 +441,26 @@ namespace L2::parser {
 		}
 		virtual void visit_program(ParseNode &x) override {
 			std::cout << "parser is visiting ENTRY POINT\n";
-			for (auto &child : x.get_children()) {
+			for (auto &child : x.children) {
 				child->accept_visitor(*this);
 			}
-			x[0]->accept_visitor(*this);
-			x[2]->accept_visitor(*this);
-			x[4]->accept_visitor(*this);
 		}
+		virtual void visit_register(ParseNode &n) {
+			std::cout << "parser is visiting a REGISTER of name " << n.string_view() << "\n";
+		}
+		virtual void visit_tensor_arg_number(ParseNode &n) {}
+		virtual void visit_arithmetic_operator(ParseNode &n) {}
+		virtual void visit_shift_operator(ParseNode &n) {}
+		virtual void visit_comparison_operator(ParseNode &n) {}
+		virtual void visit_argument_number(ParseNode &n) {}
+		virtual void visit_lea_factor(ParseNode &n) {}
+		virtual void visit_label(ParseNode &n) {}
+		virtual void visit_function_name(ParseNode &n) {}
+		virtual void visit_variable(ParseNode &n) {}
+		virtual void visit_instruction_assignment(ParseNode &n) {}
+		virtual void visit_instruction_return(ParseNode &n) {}
+		virtual void visit_instruction_memory_read(ParseNode &n) {}
+		virtual void visit_entry_point(ParseNode &n) {}
 	};
 
 
@@ -473,8 +489,8 @@ namespace L2::parser {
 				}
 			}
 
-			// ParseTreeProcessor processor;
-			// root->children[0]->accept_visitor(processor);
+			ParseTreeProcessor processor;
+			root->children[0]->accept_visitor(processor);
 		}
 		return {};
 	}
