@@ -374,7 +374,7 @@ namespace L2::parser {
 		pegtl::internal::inputerator begin;
 		pegtl::internal::inputerator end;
 		std::unique_ptr<rules::RuleDispatcher> dispatcher;
-		std::string type;// only used for displaying parse tree
+		std::string_view type;// only used for displaying parse tree
 
 		// special methods
 		ParseNode() = default;
@@ -395,7 +395,8 @@ namespace L2::parser {
 		void success(const ParseInput &in, States &&...) {
 			this->end = in.inputerator();
 			this->dispatcher = std::make_unique<Rule>();
-			this->type = typeid(this->dispatcher).name();
+			this->type = pegtl::demangle<Rule>();
+			this->type.remove_prefix(this->type.find_last_of(':') + 1);
 		}
 
 		template<typename Rule, typename ParseInput, typename... States>
