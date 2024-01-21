@@ -5,7 +5,7 @@ OBJ_FILES			   	:= $(addprefix obj/,$(notdir $(CPP_FILES:.cpp=.o)))
 OBJ_FILES_CC		 	:= $(addprefix obj/,$(notdir $(CPP_FILES_CC:.cpp=.o)))
 OBJ_FILES_INTERP 	:= $(addprefix obj/,$(notdir $(CPP_FILES_INTERP:.cpp=.o)))
 CC_FLAGS			   	:= --std=c++17 -I./src -I../lib/PEGTL/include -I../lib -g3 -DDEBUG -pedantic -pedantic-errors -Werror=pedantic
-LD_FLAGS		   	 	:= 
+LD_FLAGS		   	 	:=
 CC								:= g++
 PL_CLASS          := L2
 DST_PL_CLASS      := L1
@@ -14,6 +14,10 @@ COMPILER					:= bin/$(PL_CLASS)
 INTERP        		:= bin/$(PL_CLASS)i
 OPT_LEVEL         :=
 CC_CLASS					:= $(PL_CLASS)c
+
+runc: compiler
+	-./L2c -p graph.txt my_tests/scratch.L2
+	dot -Tsvg -o graph.svg graph.txt
 
 compiler: dirs $(COMPILER)
 
@@ -69,7 +73,7 @@ test_interp_broken: dirs $(INTERP)
 	../scripts/test_interp.sh $(EXT_CLASS) $(INTERP) "tests/broken" "0" "0"
 
 rm_tests_that_fail_with_interp: dirs $(INTERP)
-	../scripts/test_interp.sh $(EXT_CLASS) $(INTERP) "tests" "1" "1" 
+	../scripts/test_interp.sh $(EXT_CLASS) $(INTERP) "tests" "1" "1"
 
 test_new: dirs $(COMPILER)
 	../scripts/test.sh $(EXT_CLASS) $(CC_CLASS) "tests/new"
