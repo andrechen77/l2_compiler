@@ -12,6 +12,7 @@
 		%var <- stack-arg 8
 		%var <<= rcx
 		%var <<= 0
+		%var @ %var %var 1
 		// comment here
 		return
 		// comment here
