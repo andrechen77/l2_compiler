@@ -33,19 +33,23 @@ namespace L2::parser {
 		virtual void visit_number(ParseNode &n) = 0;
 		virtual void visit_program(ParseNode &n) = 0;
 		virtual void visit_register(ParseNode &n) = 0;
-		virtual void visit_tensor_arg_number(ParseNode &n) = 0;
 		virtual void visit_arithmetic_operator(ParseNode &n) = 0;
 		virtual void visit_shift_operator(ParseNode &n) = 0;
 		virtual void visit_comparison_operator(ParseNode &n) = 0;
-		virtual void visit_argument_number(ParseNode &n) = 0;
-		virtual void visit_lea_factor(ParseNode &n) = 0;
 		virtual void visit_label(ParseNode &n) = 0;
 		virtual void visit_function_name(ParseNode &n) = 0;
 		virtual void visit_variable(ParseNode &n) = 0;
 		virtual void visit_instruction_assignment(ParseNode &n) = 0;
 		virtual void visit_instruction_return(ParseNode &n) = 0;
 		virtual void visit_instruction_memory_read(ParseNode &n) = 0;
-		virtual void visit_entry_point(ParseNode &n) = 0;
+		virtual void visit_instruction_memory_write(ParseNode &n) = 0;
+		virtual void visit_instruction_arithmethic_operation(ParseNode &n) = 0;
+		virtual void visit_instruction_stack_arg(ParseNode &n) = 0;
+		virtual void visit_instruction_shift_operation(ParseNode &n) = 0;
+		virtual void visit_instructions(ParseNode &n) = 0;
+		virtual void visit_function(ParseNode &n) = 0;
+		virtual void visit_functions(ParseNode &n) = 0;
+		// TODO finish filling out
 	};
 
 	namespace rules {
@@ -99,6 +103,7 @@ namespace L2::parser {
 		struct str_le : TAO_PEGTL_STRING("\x3c=") {};
 		struct str_eq : TAO_PEGTL_STRING("=") {};
 		struct str_mem : TAO_PEGTL_STRING("mem") {};
+		struct str_stack_arg : TAO_PEGTL_STRING("stack-arg") {};
 		struct str_goto : TAO_PEGTL_STRING("goto") {};
 		struct str_cjump : TAO_PEGTL_STRING("cjump") {};
 		struct str_call : TAO_PEGTL_STRING("call") {};
@@ -146,20 +151,20 @@ namespace L2::parser {
 			>
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_number(n); } };
 
-		struct ArgumentNumberRule : RuleDispatcher,
+		struct ArgumentNumberRule :
 			seq<NumberRule>
-		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_argument_number(n); } };
+		{};
 
-		struct TensorErrorArgNumberRule : RuleDispatcher,
+		struct TensorErrorArgNumberRule :
 			seq<NumberRule>
-		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_tensor_arg_number(n); } };
+		{};
 
-		struct LeaFactorRule : RuleDispatcher,
+		struct LeaFactorRule :
 			rematch<
 				NumberRule,
 				sor<one<'1'>, one<'2'>, one<'4'>, one<'8'>>
 			>
-		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_lea_factor(n); } };
+		{};
 
 		struct NameRule : RuleDispatcher,
 			ascii::identifier // the rules for L2 rules are the same as for C identifiers
@@ -200,7 +205,10 @@ namespace L2::parser {
 
 		struct InexplicableSxRule :
 			sor<
-				str_rcx,
+				rematch<
+					RegisterRule,
+					str_rcx
+				>,
 				VariableRule
 			>
 		{};
@@ -208,25 +216,36 @@ namespace L2::parser {
 		struct InexplicableARule :
 			sor<
 				InexplicableSxRule,
-				str_rdi,
-				str_rsi,
-				str_rdx,
-				str_r8,
-				str_r9
+				rematch<
+					RegisterRule,
+					sor<
+						str_rdi,
+						str_rsi,
+						str_rdx,
+						str_r8,
+						str_r9
+					>
+				>
 			>
 		{};
 
 		struct InexplicableWRule :
 			sor<
 				InexplicableARule,
-				str_rax
+				rematch<
+					RegisterRule,
+					str_rax
+				>
 			>
 		{};
 
 		struct InexplicableXRule :
 			sor<
 				InexplicableWRule,
-				str_rsp
+				rematch<
+					RegisterRule,
+					str_rsp
+				>
 			>
 		{};
 
@@ -293,36 +312,61 @@ namespace L2::parser {
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_instruction_return(n); } };
 
 		struct InstructionMemoryReadRule : RuleDispatcher,
-			seq<
+			interleaved<
+				SpacesRule,
 				InexplicableWRule,
-				SpacesRule,
 				str_arrow,
-				SpacesRule,
 				str_mem,
-				SpacesRule,
 				InexplicableXRule,
-				SpacesRule,
 				NumberRule
 			>
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_instruction_memory_read(n); } };
 
+
+		// START COMMENTING SHIT OUT HERE
+		// TODO Implement the dispatch functions
+		struct InstructionMemoryWriteRule : RuleDispatcher,
+			interleaved<
+				SpacesRule,
+				str_mem,
+				InexplicableXRule,
+				NumberRule,
+				str_arrow,
+				InexplicableSRule
+			>
+		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_instruction_memory_write(n); } };
+
+		struct InstructionArithmeticOperationRule : RuleDispatcher,
+			interleaved<
+				SpacesRule,
+				InexplicableWRule,
+				ArithmeticOperatorRule,
+				InexplicableTRule
+			>
+		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_instruction_arithmethic_operation(n); } };
+
+		struct InstructionStackArgRule : RuleDispatcher,
+			interleaved<
+				SpacesRule,
+				InexplicableWRule,
+				str_stack_arg,
+				NumberRule
+			>
+		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_instruction_stack_arg(n); } };
+
+		struct InstructionShiftOperationRule : RuleDispatcher,
+			interleaved<
+				SpacesRule,
+				InexplicableWRule,
+				ShiftOperatorRule,
+				sor<
+					NumberRule,
+					InexplicableSxRule
+				>
+			>
+		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_instruction_shift_operation(n); } };
+
 		/*
-
-		struct _Rule : RuleDispatcher
-		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_ DEFACOMPILERERROR(n); } };
-
-		struct _Rule : RuleDispatcher
-		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_ DEFACOMPILERERROR(n); } };
-
-		struct _Rule : RuleDispatcher
-		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_ DEFACOMPILERERROR(n); } };
-
-		struct _Rule : RuleDispatcher
-		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_ DEFACOMPILERERROR(n); } };
-
-		struct _Rule : RuleDispatcher
-		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_ DEFACOMPILERERROR(n); } };
-
 		struct _Rule : RuleDispatcher
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_ DEFACOMPILERERROR(n); } };
 
@@ -339,15 +383,59 @@ namespace L2::parser {
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_ DEFACOMPILERERROR(n); } };
 		*/
 
-		struct ProgramRule : RuleDispatcher,
-			// TODO this rule is here just to test the parser for now
+		struct InstructionRule :
+			sor<
+				InstructionAssignmentRule,
+				InstructionReturnRule,
+				InstructionMemoryReadRule,
+				InstructionMemoryWriteRule,
+				InstructionArithmeticOperationRule,
+				InstructionStackArgRule,
+				InstructionShiftOperationRule
+			>
+		{};
+
+		struct InstructionsRule : RuleDispatcher,
+			plus<
+				seq<
+					LineSeparatorsWithCommentsRule,
+					bol,
+					SpacesRule,
+					InstructionRule,
+					LineSeparatorsWithCommentsRule
+				>
+			>
+		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_instructions(n); } };
+
+		struct FunctionRule : RuleDispatcher,
 			interleaved<
-				SpacesRule,
-				RegisterRule,
-				RegisterRule,
-				RegisterRule,
-				RegisterRule,
-				RegisterRule
+				LineSeparatorsWithCommentsRule,
+				seq<SpacesRule, one<'('>>,
+				seq<SpacesRule, FunctionNameRule>,
+				seq<SpacesRule, ArgumentNumberRule>,
+				InstructionsRule,
+				seq<SpacesRule, one<')'>>
+			>
+		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_function(n); } };
+
+		struct FunctionsRule : RuleDispatcher,
+			list<
+				FunctionRule,
+				LineSeparatorsWithCommentsRule
+			>
+		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_functions(n); } };
+
+		struct ProgramRule : RuleDispatcher,
+			seq<
+				LineSeparatorsWithCommentsRule,
+				interleaved<
+					LineSeparatorsWithCommentsRule,
+					seq<SpacesRule, one<'('>>,
+					FunctionNameRule,
+					FunctionsRule,
+					seq<SpacesRule, one<')'>>
+				>,
+				LineSeparatorsWithCommentsRule
 			>
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_program(n); } };
 
@@ -357,13 +445,27 @@ namespace L2::parser {
 		struct Selector : pegtl::parse_tree::selector<
 			Rule,
 			pegtl::parse_tree::store_content::on<
-				NameRule,
 				NumberRule,
+				NameRule,
+				LabelRule,
+				FunctionNameRule,
+				VariableRule,
 				RegisterRule,
+				ArithmeticOperatorRule,
+				ShiftOperatorRule,
+				ComparisonOperatorRule,
 				InstructionAssignmentRule,
 				InstructionReturnRule,
 				InstructionMemoryReadRule,
+				InstructionMemoryWriteRule,
+				InstructionArithmeticOperationRule,
+				InstructionStackArgRule,
+				InstructionShiftOperationRule,
+				InstructionsRule,
+				FunctionRule,
+				FunctionsRule,
 				ProgramRule
+				// TODO finish filling out
 			>
 		> {};
 	}
@@ -449,19 +551,22 @@ namespace L2::parser {
 		virtual void visit_register(ParseNode &n) {
 			std::cout << "parser is visiting a REGISTER of name " << n.string_view() << "\n";
 		}
-		virtual void visit_tensor_arg_number(ParseNode &n) {}
-		virtual void visit_arithmetic_operator(ParseNode &n) {}
-		virtual void visit_shift_operator(ParseNode &n) {}
-		virtual void visit_comparison_operator(ParseNode &n) {}
-		virtual void visit_argument_number(ParseNode &n) {}
-		virtual void visit_lea_factor(ParseNode &n) {}
-		virtual void visit_label(ParseNode &n) {}
-		virtual void visit_function_name(ParseNode &n) {}
-		virtual void visit_variable(ParseNode &n) {}
-		virtual void visit_instruction_assignment(ParseNode &n) {}
-		virtual void visit_instruction_return(ParseNode &n) {}
-		virtual void visit_instruction_memory_read(ParseNode &n) {}
-		virtual void visit_entry_point(ParseNode &n) {}
+		virtual void visit_arithmetic_operator(ParseNode &n) override {};
+		virtual void visit_shift_operator(ParseNode &n)override {};
+		virtual void visit_comparison_operator(ParseNode &n) override {};
+		virtual void visit_label(ParseNode &n) override {};
+		virtual void visit_function_name(ParseNode &n) override {};
+		virtual void visit_variable(ParseNode &n) override {};
+		virtual void visit_instruction_assignment(ParseNode &n) override {};
+		virtual void visit_instruction_return(ParseNode &n) override {};
+		virtual void visit_instruction_memory_read(ParseNode &n) override {};
+		virtual void visit_instruction_memory_write(ParseNode &n) override {};
+		virtual void visit_instruction_arithmethic_operation(ParseNode &n) override {};
+		virtual void visit_instruction_stack_arg(ParseNode &n) override {};
+		virtual void visit_instruction_shift_operation(ParseNode &n) override {};
+		virtual void visit_instructions(ParseNode &n) override {};
+		virtual void visit_function(ParseNode &n) override {};
+		virtual void visit_functions(ParseNode &n) override {};
 	};
 
 
