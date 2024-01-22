@@ -60,6 +60,20 @@ namespace L2::program {
 		return this->var_name;
 	}
 
+	FunctionRef::FunctionRef(const std::string_view &function_name, bool is_std) :
+		function_name {function_name},
+		is_std {is_std}
+	{}
+
+	std::string FunctionRef::to_string() const {
+		std::string result;
+		if (this->is_std) {
+			result += "std::";
+		}
+		result += this->function_name;
+		return result;
+	}
+
 	std::string InstructionReturn::to_string() const {
 		return "return";
 	}
@@ -72,7 +86,6 @@ namespace L2::program {
 		};
 		return assign_operator_to_str[static_cast<int>(op)];
 	}
-
 
 	InstructionAssignment::InstructionAssignment(
 		AssignOperator op,
@@ -88,4 +101,44 @@ namespace L2::program {
 	}
 
 	void InstructionAssignment::accept(InstructionVisitor &v) { v.visit(*this); }
+
+	InstructionGoto::InstructionGoto(std::unique_ptr<LabelLocation> &&label) :
+		label {std::move(label)}
+	{}
+
+	std::string InstructionGoto::to_string() const {
+		return "goto " + this->label->to_string();
+	}
+
+	void InstructionGoto::accept(InstructionVisitor &v) { v.visit(*this); }
+
+	InstructionCall::InstructionCall(std::unique_ptr<Value> &&callee, int64_t num_arguments) :
+		callee {std::move(callee)},
+		num_arguments {num_arguments}
+	{}
+
+	std::string InstructionCall::to_string() const {
+		return "call " + this->callee->to_string() + std::to_string(this->num_arguments);
+	}
+
+	void InstructionCall::accept(InstructionVisitor &v) { v.visit(*this); }
+
+	InstructionLeaq::InstructionLeaq(
+		std::unique_ptr<Value> &&destination,
+		std::unique_ptr<Value> &&base,
+		std::unique_ptr<Value> &&offset,
+		int64_t scale
+	) :
+		destination {std::move(destination)},
+		base {std::move(base)},
+		offset {std::move(offset)},
+		scale {scale}
+	{}
+
+	std::string InstructionLeaq::to_string() const {
+		return this->destination->to_string() + " @ " + this->base->to_string()
+			+ " " + this->base->to_string() + " " + std::to_string(this->scale);
+	}
+
+	void InstructionLeaq::accept(InstructionVisitor &v) { v.visit(*this); }
 }

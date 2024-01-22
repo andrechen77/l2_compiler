@@ -61,6 +61,15 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 	};
 
+	struct FunctionRef : Value {
+		std::string function_name;
+		bool is_std;
+
+		FunctionRef(const std::string_view &var_name, bool is_std);
+
+		virtual std::string to_string() const override;
+	};
+
 	class InstructionVisitor;
 
 	struct Instruction {
@@ -100,11 +109,50 @@ namespace L2::program {
 		virtual void accept(InstructionVisitor &v) override;
 	};
 
+	struct InstructionGoto : Instruction {
+		std::unique_ptr<LabelLocation> label;
+
+		InstructionGoto(std::unique_ptr<LabelLocation> &&label);
+
+		virtual std::string to_string() const override;
+		virtual void accept(InstructionVisitor &v) override;
+	};
+
+	struct InstructionCall : Instruction {
+		std::unique_ptr<Value> callee;
+		int64_t num_arguments; // specified by user, doesn't necessarily match function's actual num args
+
+		InstructionCall(std::unique_ptr<Value> &&callee, int64_t num_arguments);
+
+		virtual std::string to_string() const override;
+		virtual void accept(InstructionVisitor &v) override;
+	};
+
+	struct InstructionLeaq : Instruction {
+		std::unique_ptr<Value> destination;
+		std::unique_ptr<Value> base;
+		std::unique_ptr<Value> offset;
+		int64_t scale;
+
+		InstructionLeaq(
+			std::unique_ptr<Value> &&destination,
+			std::unique_ptr<Value> &&base,
+			std::unique_ptr<Value> &&offset,
+			int64_t scale
+		);
+
+		virtual std::string to_string() const override;
+		virtual void accept(InstructionVisitor &v) override;
+	};
+
 	class InstructionVisitor {
 		public:
 
 		virtual void visit(InstructionReturn &inst) = 0;
 		virtual void visit(InstructionAssignment &inst) = 0;
+		virtual void visit(InstructionGoto &inst) = 0;
+		virtual void visit(InstructionCall &inst) = 0;
+		virtual void visit(InstructionLeaq &inst) = 0;
 		// TODO add visit methods for all instructions here
 	};
 
