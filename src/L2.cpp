@@ -130,6 +130,26 @@ namespace L2::program {
 
 	void InstructionCompareAssignment::accept(InstructionVisitor &v) {v.visit(*this); }
 
+	InstructionCompareJump::InstructionCompareJump(
+		const ComparisonOperator op,
+		std::unique_ptr<Value> &&lhs,
+		std::unique_ptr<Value> &&rhs,
+		std::unique_ptr<LabelLocation> label
+	):
+		op {op}, lhs{std::move(lhs)}, rhs{std::move(rhs)}, label{std::move(label)}
+	{}
+
+	std::string InstructionCompareJump::to_string() const {
+		std::string sol = "cjump ";
+		sol += this->lhs->to_string() + " ";
+		sol += program::to_string(this->op) + " ";
+		sol += this->rhs->to_string() + " ";
+		sol += this->label->to_string();
+		return sol;
+	}
+
+	void InstructionCompareJump::accept(InstructionVisitor &v) { v.visit(*this); }
+
 	InstructionGoto::InstructionGoto(std::unique_ptr<LabelLocation> &&label) :
 		label {std::move(label)}
 	{}
