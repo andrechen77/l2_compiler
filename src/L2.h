@@ -22,49 +22,91 @@ namespace L2::program {
 
 	struct Register : Value {
 		RegisterID id;
+
 		Register(const std::string_view &id);
+
 		virtual std::string to_string() const override;
 	};
 
 	struct MemoryLocation : Value {
 		std::unique_ptr<Value> base;
 		int64_t offset;
+
 		MemoryLocation(std::unique_ptr<Value> &&base, int64_t offset);
+
 		virtual std::string to_string() const override;
 	};
 
 	struct NumberLiteral : Value {
 		int64_t value;
+
 		NumberLiteral(int64_t value);
+
 		virtual std::string to_string() const override;
 	};
 
 	struct LabelLocation : Value {
 		std::string label_name;
+
 		LabelLocation(const std::string_view &labelName);
+
 		virtual std::string to_string() const override;
 	};
 
 	struct Variable : Value {
 		std::string var_name;
+
 		Variable(const std::string_view &var_name);
+
 		virtual std::string to_string() const override;
 	};
 
-	class InstructionVisitor {
-		virtual void visit(InstructionReturn &inst) = 0;
-		// TODO add visit methods for all instructions here
-	}
+	class InstructionVisitor;
 
 	struct Instruction {
 		virtual std::string to_string() const = 0;
 		virtual void accept(InstructionVisitor &v) = 0;
-	}
+	};
 
 	struct InstructionReturn : Instruction {
 		virtual std::string to_string() const override;
-		virtual void accept(InstructionVisitor &v) const override;
-	}
+		virtual void accept(InstructionVisitor &v) override;
+	};
+
+	enum struct AssignOperator {
+		pure,
+		add,
+		subtract,
+		multiply,
+		bitwise_and,
+		lshift,
+		rshift
+	};
+
+	std::string to_string(AssignOperator op);
+
+	struct InstructionAssignment : Instruction {
+		std::unique_ptr<Value> source;
+		AssignOperator op;
+		std::unique_ptr<Value> destination;
+
+		InstructionAssignment(
+			AssignOperator op,
+			std::unique_ptr<Value> &&source,
+			std::unique_ptr<Value> &&destination
+		);
+
+		virtual std::string to_string() const override;
+		virtual void accept(InstructionVisitor &v) override;
+	};
+
+	class InstructionVisitor {
+		public:
+
+		virtual void visit(InstructionReturn &inst) = 0;
+		virtual void visit(InstructionAssignment &inst) = 0;
+		// TODO add visit methods for all instructions here
+	};
 
 	struct Program {};
 }

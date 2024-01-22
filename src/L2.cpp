@@ -5,7 +5,7 @@
 #include <charconv>
 
 namespace L2::program {
-	std::map<std::string, RegisterID, std::less<void>> str_to_reg_id {
+	const std::map<std::string, RegisterID, std::less<void>> str_to_reg_id {
 		{ "rax", RegisterID::rax },
 		{ "rcx", RegisterID::rcx },
 		{ "rdx", RegisterID::rdx },
@@ -15,22 +15,22 @@ namespace L2::program {
 		{ "r9", RegisterID::r9 },
 		{ "rsp", RegisterID::rsp }
 	};
-	std::string reg_id_to_str[] = {
-		"rax",
-		"rcx",
-		"rdx",
-		"rdi",
-		"rsi",
-		"r8",
-		"r9",
-		"rsp"
-	};
 
 	Register::Register(const std::string_view &id) :
 		id {str_to_reg_id.find(id)->second}
 	{}
 
 	std::string Register::to_string() const {
+		static const std::string reg_id_to_str[] = {
+			"rax",
+			"rcx",
+			"rdx",
+			"rdi",
+			"rsi",
+			"r8",
+			"r9",
+			"rsp"
+		};
 		return reg_id_to_str[static_cast<int>(this->id)];
 	}
 
@@ -59,4 +59,33 @@ namespace L2::program {
 	std::string Variable::to_string() const {
 		return this->var_name;
 	}
+
+	std::string InstructionReturn::to_string() const {
+		return "return";
+	}
+
+	void InstructionReturn::accept(InstructionVisitor &v) { v.visit(*this); }
+
+	std::string to_string(AssignOperator op) {
+		static const std::string assign_operator_to_str[] = {
+			"<-", "+=", "-=", "*=", "&=", "<<=", ">>="
+		};
+		return assign_operator_to_str[static_cast<int>(op)];
+	}
+
+
+	InstructionAssignment::InstructionAssignment(
+		AssignOperator op,
+		std::unique_ptr<Value> &&source,
+		std::unique_ptr<Value> &&destination
+	) :
+		op { op }, source { std::move(source) }, destination { std::move(destination )}
+	{}
+
+	std::string InstructionAssignment::to_string() const {
+		return this->source->to_string() + " " + program::to_string(this->op)
+			+ " " + this->destination->to_string();
+	}
+
+	void InstructionAssignment::accept(InstructionVisitor &v) { v.visit(*this); }
 }
