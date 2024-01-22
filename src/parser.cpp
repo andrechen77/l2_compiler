@@ -91,20 +91,12 @@ namespace L2::parser {
 		struct str_return : TAO_PEGTL_STRING("return") {};
 		struct str_arrow : TAO_PEGTL_STRING("\x3c-") {};
 		struct str_rax : TAO_PEGTL_STRING("rax") {};
-		struct str_rbx : TAO_PEGTL_STRING("rbx") {};
 		struct str_rcx : TAO_PEGTL_STRING("rcx") {};
 		struct str_rdx : TAO_PEGTL_STRING("rdx") {};
 		struct str_rdi : TAO_PEGTL_STRING("rdi") {};
 		struct str_rsi : TAO_PEGTL_STRING("rsi") {};
 		struct str_r8 : TAO_PEGTL_STRING("r8") {};
 		struct str_r9 : TAO_PEGTL_STRING("r9") {};
-		struct str_r10 : TAO_PEGTL_STRING("r10") {};
-		struct str_r11 : TAO_PEGTL_STRING("r11") {};
-		struct str_r12 : TAO_PEGTL_STRING("r12") {};
-		struct str_r13 : TAO_PEGTL_STRING("r13") {};
-		struct str_r14 : TAO_PEGTL_STRING("r14") {};
-		struct str_r15 : TAO_PEGTL_STRING("r15") {};
-		struct str_rbp : TAO_PEGTL_STRING("rbp") {};
 		struct str_rsp : TAO_PEGTL_STRING("rsp") {};
 		struct str_plus : TAO_PEGTL_STRING("\x2b\x3d") {};
 		struct str_minus : TAO_PEGTL_STRING("\x2d\x3d") {};
@@ -194,20 +186,12 @@ namespace L2::parser {
 		struct RegisterRule : RuleDispatcher,
 			sor<
 				str_rax,
-				str_rbx,
 				str_rcx,
 				str_rdx,
 				str_rdi,
 				str_rsi,
 				str_r8,
 				str_r9,
-				str_r10,
-				str_r11,
-				str_r12,
-				str_r13,
-				str_r14,
-				str_r15,
-				str_rbp,
 				str_rsp
 			>
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_register(n); } };
@@ -698,7 +682,6 @@ namespace L2::parser {
 			std::cout << "parser is visiting a NUMBER\n";
 		}
 		virtual void visit_program(ParseNode &x) override {
-			std::cout << "parser is visiting ENTRY POINT\n";
 			for (auto &child : x.children) {
 				child->accept_visitor(*this);
 			}
