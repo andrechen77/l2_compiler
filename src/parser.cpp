@@ -349,6 +349,7 @@ namespace L2::parser {
 			interleaved<
 				SpacesRule,
 				InexplicableWRule,
+				str_arrow,
 				str_stack_arg,
 				NumberRule
 			>

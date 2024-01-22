@@ -1,11 +1,28 @@
+// comment here
 (@main
+	// comment here
 	(@main
+		// comment here
 		0
+		// comment here
 		rax <- 1
+		rax <- mem %var 0
+		mem %var 0 <- 0
+		rcx += rdx
+		%var <- stack-arg 8
+		%var <<= rcx
+		%var <<= 0
+		// comment here
 		return
+		// comment here
 	)
+	// comment here
 	(@otherfunc
+		// comment here
 		1
+		// comment here
 		return
+		// comment here
 	)
+	// comment here
 )
