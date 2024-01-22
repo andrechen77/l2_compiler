@@ -51,8 +51,19 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 	};
 
+	class InstructionVisitor {
+		virtual void visit(InstructionReturn &inst) = 0;
+		// TODO add visit methods for all instructions here
+	}
+
 	struct Instruction {
 		virtual std::string to_string() const = 0;
+		virtual void accept(InstructionVisitor &v) = 0;
+	}
+
+	struct InstructionReturn : Instruction {
+		virtual std::string to_string() const override;
+		virtual void accept(InstructionVisitor &v) const override;
 	}
 
 	struct Program {};
