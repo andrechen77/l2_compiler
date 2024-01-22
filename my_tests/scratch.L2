@@ -12,6 +12,16 @@
 		%var <- stack-arg 8
 		%var <<= rcx
 		%var <<= 0
+		mem %var 0 += 0
+		rax += mem %var 0
+		rax <- %var < rax
+		cjump rax < 0 :label
+		:label
+		goto :label
+		call @otherfunc 0
+		call print 1
+		%var++
+		%var--
 		%var @ %var %var 1
 		// comment here
 		return

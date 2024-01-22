@@ -385,7 +385,7 @@ namespace L2::parser {
 			>
 		{ virtual void dispatch(ParseNodeVisitor &v, ParseNode &n) override { v.visit_instruction_plus_write_memory(n); } };
 
-		struct InstructionMinusWriteRule : RuleDispatcher,
+		struct InstructionMinusWriteMemoryRule : RuleDispatcher,
 			interleaved<
 				SpacesRule,
 				str_mem,
@@ -524,7 +524,7 @@ namespace L2::parser {
 				InstructionStackArgRule,
 				InstructionShiftOperationRule,
 				InstructionPlusWriteMemoryRule,
-				InstructionMinusWriteRule,
+				InstructionMinusWriteMemoryRule,
 				InstructionPlusReadMemoryRule,
 				InstructionMinusReadMemoryRule,
 				InstructionCJumpRule,
@@ -606,7 +606,7 @@ namespace L2::parser {
 				InstructionStackArgRule,
 				InstructionShiftOperationRule,
 				InstructionPlusWriteMemoryRule,
-				InstructionMinusWriteRule,
+				InstructionMinusWriteMemoryRule,
 				InstructionPlusReadMemoryRule,
 				InstructionMinusReadMemoryRule,
 				InstructionCJumpRule,
