@@ -102,6 +102,34 @@ namespace L2::program {
 
 	void InstructionAssignment::accept(InstructionVisitor &v) { v.visit(*this); }
 
+	std::string to_string(ComparisonOperator op){
+		static const std::string arr[] = {"<=", "<", "="};
+		return arr[static_cast<int>(op)];
+	}
+
+	InstructionCompareAssignment::InstructionCompareAssignment(
+		std::unique_ptr<Value> &&destination,
+		ComparisonOperator op,
+		std::unique_ptr<Value> &&lhs,
+		std::unique_ptr<Value> &&rhs
+	) :
+		destination {std::move(destination)},
+		op {op},
+		lhs {std::move(lhs)},
+		rhs {std::move(rhs)}
+	{}
+
+	std::string InstructionCompareAssignment::to_string() const {
+		std::string result = "";
+		result += this->destination->to_string() + " <- ";
+		result += this->lhs->to_string();
+		result += program::to_string(this->op);
+		result += this->rhs->to_string();
+		return result;
+	}
+
+	void InstructionCompareAssignment::accept(InstructionVisitor &v) {v.visit(*this); }
+
 	InstructionGoto::InstructionGoto(std::unique_ptr<LabelLocation> &&label) :
 		label {std::move(label)}
 	{}

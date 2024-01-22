@@ -109,6 +109,31 @@ namespace L2::program {
 		virtual void accept(InstructionVisitor &v) override;
 	};
 
+	enum struct ComparisonOperator {
+		lt,
+		le,
+		eq
+	};
+
+	std::string to_string(ComparisonOperator op);
+
+	struct InstructionCompareAssignment : Instruction {
+		std::unique_ptr<Value> destination;
+		ComparisonOperator op;
+		std::unique_ptr<Value> lhs;
+		std::unique_ptr<Value> rhs;
+
+		InstructionCompareAssignment(
+			std::unique_ptr<Value> &&destination,
+			ComparisonOperator op,
+			std::unique_ptr<Value> &&lhs,
+			std::unique_ptr<Value> &&rhs
+		);
+
+		virtual std::string to_string() const override;
+		virtual void accept(InstructionVisitor &v) override;
+	};
+
 	struct InstructionGoto : Instruction {
 		std::unique_ptr<LabelLocation> label;
 
@@ -150,6 +175,7 @@ namespace L2::program {
 
 		virtual void visit(InstructionReturn &inst) = 0;
 		virtual void visit(InstructionAssignment &inst) = 0;
+		virtual void visit(InstructionCompareAssignment &inst) = 0;
 		virtual void visit(InstructionGoto &inst) = 0;
 		virtual void visit(InstructionCall &inst) = 0;
 		virtual void visit(InstructionLeaq &inst) = 0;
