@@ -1,3 +1,4 @@
+#include "parser.h"
 #include <string>
 #include <vector>
 #include <utility>
@@ -13,8 +14,6 @@
 #include <iostream>
 #include <assert.h>
 #include <optional>
-
-#include <parser.h>
 
 void print_help(char *progName) {
 	std::cerr << "Usage: " << progName << " [-v] [-g 0|1] [-O 0|1|2] [-s] [-l] [-i] [-p] SOURCE" << std::endl;
@@ -74,7 +73,7 @@ int main(
 	/*
 	 * Parse the input file.
 	 */
-	std::unique_ptr<L2::Program> p;
+	std::unique_ptr<L2::program::Program> p;
 	if (spill_only) {
 		// Parse an L2 function and the spill arguments.
 		p = L2::parser::parse_spill_file(argv[optind]);

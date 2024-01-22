@@ -727,7 +727,7 @@ namespace L2::parser {
 	// 	node->accept(&v);
 	// }
 
-	std::unique_ptr<Program> parse_file(char *fileName, std::optional<std::string> parse_tree_output) {
+	std::unique_ptr<L2::program::Program> parse_file(char *fileName, std::optional<std::string> parse_tree_output) {
 		// Check the grammar for some possible issues.
 		// TODO move this to a separate file bc it's performance-intensive
 		if (pegtl::analyze<rules::EntryPointRule>() != 0) {
@@ -752,10 +752,10 @@ namespace L2::parser {
 		}
 		return {};
 	}
-	std::unique_ptr<Program> parse_function_file(char *fileName) {
+	std::unique_ptr<L2::program::Program> parse_function_file(char *fileName) {
 		exit(1);
 	}
-	std::unique_ptr<Program> parse_spill_file(char *fileName) {
+	std::unique_ptr<L2::program::Program> parse_spill_file(char *fileName) {
 		exit(1);
 	}
 }
