@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include <string>
 #include <string_view>
 
@@ -227,5 +228,32 @@ namespace L2::program {
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
-	struct Program {};
+	struct Function {
+		std::string function_name;
+		int64_t num_arguments;
+		std::vector<std::unique_ptr<Instruction>> instructions;
+
+		Function(
+			const std::string_view &function_name,
+			int64_t num_arguments,
+			std::vector<std::unique_ptr<Instruction>> &&instructions
+		) :
+			function_name {function_name},
+			num_arguments {num_arguments},
+			instructions {std::move(instructions)}
+		{}
+	};
+
+	struct Program {
+		std::unique_ptr<FunctionRef> entry_function;
+		std::vector<std::unique_ptr<Function>> functions;
+
+		Program(
+			std::unique_ptr<FunctionRef> &&entry_function,
+			std::vector<std::unique_ptr<Function>> &&functions
+		) :
+			entry_function {std::move(entry_function)},
+			functions {std::move(functions)}
+		{}
+	};
 }
