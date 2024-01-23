@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "program/program.h"
 #include <sched.h>
 #include <string>
 #include <vector>
@@ -619,7 +620,26 @@ namespace L2::parser {
 		}
 	};
 
-	std::unique_ptr<L2::program::Program> parse_file(char *fileName, std::optional<std::string> parse_tree_output) {
+	using namespace L2::program;
+
+	namespace node_processor {
+		std::string make_name(const ParseNode &n) {
+			return n.string_view();
+		}
+
+		// std::unique_ptr<FunctionRef> process_function_ref(const ParseNode &n) {
+		// 	return std::make_unique<FunctionRef>(process_name(*n.children[0]), false);
+		// }
+
+		// std::unique_ptr<Program> process_program_node(const ParseNode &n) {
+		// 	return std::make_unique<Program>(
+		// 		process_function_ref(*n.children[0]),
+		// 		process_instructions(*n.children[1])
+		// 	);
+		// }
+	}
+
+	std::unique_ptr<Program> parse_file(char *fileName, std::optional<std::string> parse_tree_output) {
 		// Check the grammar for some possible issues.
 		// TODO move this to a separate file bc it's performance-intensive
 		if (pegtl::analyze<rules::EntryPointRule>() != 0) {
@@ -639,14 +659,16 @@ namespace L2::parser {
 				}
 			}
 
-			std::cout << "the first node is of type " << root->children[0]->rule->name() << "\n";
+			// return node_processor::make_program(*root->children[0])
+
+			// std::cout << "the first node is of type " << root->children[0]->rule->name() << "\n";
 		}
 		return {};
 	}
-	std::unique_ptr<L2::program::Program> parse_function_file(char *fileName) {
+	std::unique_ptr<Program> parse_function_file(char *fileName) {
 		exit(1);
 	}
-	std::unique_ptr<L2::program::Program> parse_spill_file(char *fileName) {
+	std::unique_ptr<Program> parse_spill_file(char *fileName) {
 		exit(1);
 	}
 }
