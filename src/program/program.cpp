@@ -34,8 +34,12 @@ namespace L2::program {
 		return reg_id_to_str[static_cast<int>(this->id)];
 	}
 
+	std::string StackArg::to_string() const {
+        return "stack-arg " + this->stack_num->to_string();
+    }
+
 	std::string MemoryLocation::to_string() const {
-		return "mem " + this->base->to_string() + " " + std::to_string(this->offset);
+		return "mem " + this->base->to_string() + " " + this->offset->to_string();
 	}
 
 	std::string NumberLiteral::to_string() const {
@@ -63,6 +67,19 @@ namespace L2::program {
 		return "return";
 	}
 
+	AssignOperator str_to_ass_op(const std::string_view &str) {
+		const std::map<std::string, AssignOperator, std::less<void>> map {
+			{ "<-", AssignOperator::pure },
+			{ "+=", AssignOperator::add },
+			{ "-=", AssignOperator::subtract },
+			{ "*=", AssignOperator::multiply },
+			{ "&=", AssignOperator::bitwise_and },
+			{ "<<=", AssignOperator::lshift },
+			{ ">>=", AssignOperator::rshift }
+		};
+		return map.find(str)->second;
+	}
+
 	std::string to_string(AssignOperator op) {
 		static const std::string assign_operator_to_str[] = {
 			"<-", "+=", "-=", "*=", "&=", "<<=", ">>="
@@ -78,6 +95,15 @@ namespace L2::program {
 	std::string to_string(ComparisonOperator op){
 		static const std::string arr[] = {"<=", "<", "="};
 		return arr[static_cast<int>(op)];
+	}
+
+	ComparisonOperator str_to_cmp_op(const std::string_view &str) {
+		const std::map<std::string, ComparisonOperator, std::less<void>> map {
+			{ "<", ComparisonOperator::lt },
+			{ "<=", ComparisonOperator::le },
+			{ "=", ComparisonOperator::eq }
+		};
+		return map.find(str)->second;
 	}
 
 	std::string InstructionCompareAssignment::to_string() const {
@@ -96,6 +122,10 @@ namespace L2::program {
 		sol += this->rhs->to_string() + " ";
 		sol += this->label->to_string();
 		return sol;
+	}
+
+	std::string InstructionLabel::to_string() const {
+		return ":" + this->label->to_string();
 	}
 
 	std::string InstructionGoto::to_string() const {

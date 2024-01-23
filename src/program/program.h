@@ -29,17 +29,6 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 	};
 
-	struct MemoryLocation : Value {
-		std::unique_ptr<Value> base;
-		int64_t offset;
-
-		MemoryLocation(std::unique_ptr<Value> &&base, int64_t offset) :
-			base {std::move(base)}, offset {offset}
-		{}
-
-		virtual std::string to_string() const override;
-	};
-
 	struct NumberLiteral : Value {
 		int64_t value;
 
@@ -48,10 +37,29 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 	};
 
+	struct StackArg : Value {
+		std::unique_ptr<NumberLiteral> stack_num;
+
+		StackArg(std::unique_ptr<NumberLiteral> &&stack_num) : stack_num {std::move(stack_num)} {}
+
+		virtual std::string to_string() const override;
+	};
+
+	struct MemoryLocation : Value {
+		std::unique_ptr<Value> base;
+		std::unique_ptr<NumberLiteral> offset;
+
+		MemoryLocation(std::unique_ptr<Value> &&base, std::unique_ptr<NumberLiteral> &&offset) :
+			base {std::move(base)}, offset {std::move(offset)}
+		{}
+
+		virtual std::string to_string() const override;
+	};
+
 	struct LabelLocation : Value {
 		std::string label_name;
 
-		LabelLocation(const std::string_view &labelName) : label_name {label_name} {}
+		LabelLocation(const std::string_view &label_name) : label_name {label_name} {}
 
 		virtual std::string to_string() const override;
 	};
@@ -68,7 +76,7 @@ namespace L2::program {
 		std::string function_name;
 		bool is_std;
 
-		FunctionRef(const std::string_view &var_name, bool is_std) :
+		FunctionRef(const std::string_view &function_name, bool is_std) :
 			function_name {function_name},
 			is_std {is_std}
 		{}
@@ -80,6 +88,7 @@ namespace L2::program {
 	struct InstructionAssignment;
 	struct InstructionCompareAssignment;
 	struct InstructionCompareJump;
+	struct InstructionLabel;
 	struct InstructionGoto;
 	struct InstructionCall;
 	struct InstructionLeaq;
@@ -91,6 +100,7 @@ namespace L2::program {
 		virtual void visit(InstructionAssignment &inst) = 0;
 		virtual void visit(InstructionCompareAssignment &inst) = 0;
 		virtual void visit(InstructionCompareJump &inst) = 0;
+		virtual void visit(InstructionLabel &inst) = 0;
 		virtual void visit(InstructionGoto &inst) = 0;
 		virtual void visit(InstructionCall &inst) = 0;
 		virtual void visit(InstructionLeaq &inst) = 0;
@@ -116,6 +126,8 @@ namespace L2::program {
 		rshift
 	};
 
+	AssignOperator str_to_ass_op(const std::string_view &str);
+
 	std::string to_string(AssignOperator op);
 
 	struct InstructionAssignment : Instruction {
@@ -140,6 +152,8 @@ namespace L2::program {
 		le,
 		eq
 	};
+
+	ComparisonOperator str_to_cmp_op(const std::string_view &str);
 
 	std::string to_string(ComparisonOperator op);
 
@@ -172,13 +186,22 @@ namespace L2::program {
 		std::unique_ptr<LabelLocation> label;
 
 		InstructionCompareJump(
-			const ComparisonOperator op,
+			ComparisonOperator op,
 			std::unique_ptr<Value> &&lhs,
 			std::unique_ptr<Value> &&rhs,
 			std::unique_ptr<LabelLocation> label
 		):
 			op {op}, lhs{std::move(lhs)}, rhs{std::move(rhs)}, label{std::move(label)}
 		{}
+
+		virtual std::string to_string() const override;
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
+	};
+
+	struct InstructionLabel : Instruction {
+		std::unique_ptr<LabelLocation> label;
+
+		InstructionLabel(std::unique_ptr<LabelLocation> &&label) : label {std::move(label)} {}
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -229,17 +252,17 @@ namespace L2::program {
 	};
 
 	struct Function {
-		std::string function_name;
-		int64_t num_arguments;
+		std::unique_ptr<FunctionRef> name;
+		std::unique_ptr<NumberLiteral> num_arguments;
 		std::vector<std::unique_ptr<Instruction>> instructions;
 
 		Function(
-			const std::string_view &function_name,
-			int64_t num_arguments,
+			std::unique_ptr<FunctionRef> &&name,
+			std::unique_ptr<NumberLiteral> &&num_arguments,
 			std::vector<std::unique_ptr<Instruction>> &&instructions
 		) :
-			function_name {function_name},
-			num_arguments {num_arguments},
+			name {std::move(name)},
+			num_arguments {std::move(num_arguments)},
 			instructions {std::move(instructions)}
 		{}
 	};

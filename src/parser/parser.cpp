@@ -1,5 +1,7 @@
 #include "parser.h"
 #include "program/program.h"
+#include "utils.h"
+#include <typeinfo>
 #include <sched.h>
 #include <string>
 #include <vector>
@@ -216,6 +218,23 @@ namespace L2::parser {
 			>
 		{};
 
+		struct StackArgRule :
+			interleaved<
+				SpacesRule,
+				str_stack_arg,
+				NumberRule
+			>
+		{};
+
+		struct MemoryLocationRule :
+			interleaved<
+				SpacesRule,
+				str_mem,
+				InexplicableXRule,
+				NumberRule
+			>
+		{};
+
 		struct ArithmeticOperatorRule :
 			sor<
 				str_plus,
@@ -261,18 +280,14 @@ namespace L2::parser {
 				SpacesRule,
 				InexplicableWRule,
 				str_arrow,
-				str_mem,
-				InexplicableXRule,
-				NumberRule
+				MemoryLocationRule
 			>
 		{};
 
 		struct InstructionMemoryWriteRule :
 			interleaved<
 				SpacesRule,
-				str_mem,
-				InexplicableXRule,
-				NumberRule,
+				MemoryLocationRule,
 				str_arrow,
 				InexplicableSRule
 			>
@@ -292,8 +307,7 @@ namespace L2::parser {
 				SpacesRule,
 				InexplicableWRule,
 				str_arrow,
-				str_stack_arg,
-				NumberRule
+				StackArgRule
 			>
 		{};
 
@@ -312,9 +326,7 @@ namespace L2::parser {
 		struct InstructionPlusWriteMemoryRule :
 			interleaved<
 				SpacesRule,
-				str_mem,
-				InexplicableXRule,
-				NumberRule,
+				MemoryLocationRule,
 				str_plus,
 				InexplicableTRule
 			>
@@ -323,9 +335,7 @@ namespace L2::parser {
 		struct InstructionMinusWriteMemoryRule :
 			interleaved<
 				SpacesRule,
-				str_mem,
-				InexplicableXRule,
-				NumberRule,
+				MemoryLocationRule,
 				str_minus,
 				InexplicableTRule
 			>
@@ -336,9 +346,7 @@ namespace L2::parser {
 				SpacesRule,
 				InexplicableWRule,
 				str_plus,
-				str_mem,
-				InexplicableXRule,
-				NumberRule
+				MemoryLocationRule
 			>
 		{};
 
@@ -347,9 +355,7 @@ namespace L2::parser {
 				SpacesRule,
 				InexplicableWRule,
 				str_minus,
-				str_mem,
-				InexplicableXRule,
-				NumberRule
+				MemoryLocationRule
 			>
 		{};
 
@@ -527,6 +533,8 @@ namespace L2::parser {
 				FunctionNameRule,
 				VariableRule,
 				RegisterRule,
+				StackArgRule,
+				MemoryLocationRule,
 				StdFunctionNameRule,
 				ArithmeticOperatorRule,
 				ShiftOperatorRule,
@@ -605,8 +613,13 @@ namespace L2::parser {
 			};
 		}
 
-		std::unique_ptr<ParseNode> &operator[](int index) {
-			return this->children.at(index);
+		const ParseNode &operator[](int index) const {
+			try {
+				return *this->children.at(index);
+			} catch (std::out_of_range &e) {
+				std::cout << this->type << "!!!!!!!!!!!";
+				throw e;
+			}
 		}
 
 		// methods used to display the parse tree
@@ -623,20 +636,296 @@ namespace L2::parser {
 	using namespace L2::program;
 
 	namespace node_processor {
-		std::string make_name(const ParseNode &n) {
+		template<typename T>
+		using ptr = std::unique_ptr<T>;
+
+		ptr<NumberLiteral> convert_number_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::NumberRule));
+			return std::make_unique<NumberLiteral>(
+				utils::string_view_to_int<int64_t>(n.string_view())
+			);
+		}
+
+		std::string_view convert_name_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::NameRule));
 			return n.string_view();
 		}
 
-		// std::unique_ptr<FunctionRef> process_function_ref(const ParseNode &n) {
-		// 	return std::make_unique<FunctionRef>(process_name(*n.children[0]), false);
-		// }
+		ptr<LabelLocation> convert_label_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::LabelRule));
+			return std::make_unique<LabelLocation>(convert_name_rule(n[0]));
+		}
 
-		// std::unique_ptr<Program> process_program_node(const ParseNode &n) {
-		// 	return std::make_unique<Program>(
-		// 		process_function_ref(*n.children[0]),
-		// 		process_instructions(*n.children[1])
-		// 	);
-		// }
+		ptr<FunctionRef> convert_function_name_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::FunctionNameRule));
+			return std::make_unique<FunctionRef>(convert_name_rule(n[0]), false);
+		}
+
+		ptr<Variable> convert_variable_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::VariableRule));
+			return std::make_unique<Variable>(convert_name_rule(n[0]));
+		}
+
+		ptr<Register> convert_register_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::RegisterRule));
+			return std::make_unique<Register>(n.string_view());
+		}
+
+		ptr<Value> make_value(const ParseNode &n);
+
+		ptr<StackArg> convert_stack_arg_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::StackArgRule));
+			return std::make_unique<StackArg>(convert_number_rule(n[0]));
+		}
+
+		ptr<MemoryLocation> convert_memory_location_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::MemoryLocationRule));
+			return std::make_unique<MemoryLocation>(
+				make_value(n[0]),
+				convert_number_rule(n[1])
+			);
+		}
+
+		ptr<FunctionRef> convert_std_function_name_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::StdFunctionNameRule));
+			return std::make_unique<FunctionRef>(n.string_view(), true);
+		}
+
+		ptr<Value> make_value(const ParseNode &n) {
+			const std::type_info &rule = *n.rule;
+			if (rule == typeid(rules::RegisterRule)) {
+				return convert_register_rule(n);
+			} else if (rule == typeid(rules::NumberRule)) {
+				return convert_number_rule(n);
+			} else if (rule == typeid(rules::LabelRule)) {
+				return convert_label_rule(n);
+			} else if (rule == typeid(rules::VariableRule)) {
+				return convert_variable_rule(n);
+			} else if (rule == typeid(rules::FunctionNameRule)) {
+				return convert_function_name_rule(n);
+			} else if (rule == typeid(rules::StdFunctionNameRule)) {
+				return convert_std_function_name_rule(n);
+			} else if (rule == typeid(rules::MemoryLocationRule)) {
+				return convert_memory_location_rule(n);
+			} else if (rule == typeid(rules::StackArgRule)) {
+				return convert_stack_arg_rule(n);
+			} else {
+				std::cerr << "Cannot make Value from this parse node of type " << n.type << "\n";
+				exit(1);
+			}
+		}
+
+		AssignOperator make_assign_operator(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::ArithmeticOperatorRule)
+				|| *n.rule == typeid(rules::ShiftOperatorRule)
+				|| *n.rule == typeid(rules::ComparisonOperatorRule));
+			return str_to_ass_op(n.string_view());
+		}
+
+		ComparisonOperator convert_comparison_operator_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::ComparisonOperatorRule));
+			return str_to_cmp_op(n.string_view());
+		}
+
+		ptr<InstructionCompareAssignment> convert_instruction_assignment_compare(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionAssignmentCompareRule));
+			return std::make_unique<InstructionCompareAssignment>(
+				make_value(n[0]),
+				convert_comparison_operator_rule(n[2]),
+				make_value(n[1]),
+				make_value(n[3])
+			);
+		}
+
+		std::unique_ptr<InstructionAssignment> make_pure_instruction_assignment(const ParseNode &n){
+			assert(*n.rule == typeid(rules::InstructionAssignmentRule)
+				|| *n.rule == typeid(rules::InstructionMemoryReadRule)
+				|| *n.rule == typeid(rules::InstructionMemoryWriteRule)
+				|| *n.rule == typeid(rules::InstructionStackArgRule));
+			return std::make_unique<InstructionAssignment>(
+				AssignOperator::pure,
+				make_value(n[1]),
+				make_value(n[0])
+			);
+		}
+
+		std::unique_ptr<InstructionAssignment> make_plus_instruction_assignment(const ParseNode &n){
+			assert(*n.rule == typeid(rules::InstructionPlusReadMemoryRule)
+				|| *n.rule == typeid(rules::InstructionPlusWriteMemoryRule));
+			return std::make_unique<InstructionAssignment>(
+				AssignOperator::add,
+				make_value(n[1]),
+				make_value(n[0])
+			);
+		}
+
+		std::unique_ptr<InstructionAssignment> make_minus_instruction_assignment(const ParseNode &n){
+			assert(*n.rule == typeid(rules::InstructionMinusReadMemoryRule)
+				|| *n.rule == typeid(rules::InstructionMinusWriteMemoryRule));
+			return std::make_unique<InstructionAssignment>(
+				AssignOperator::subtract,
+				make_value(n[1]),
+				make_value(n[0])
+			);
+		}
+
+		ptr<InstructionReturn> convert_instruction_return_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionReturnRule));
+			return std::make_unique<InstructionReturn>();
+		}
+
+		std::unique_ptr<InstructionAssignment> make_custom_op_instruction_assignment(const ParseNode &n){
+			assert(*n.rule == typeid(rules::InstructionArithmeticOperationRule)
+				|| *n.rule == typeid(rules::InstructionShiftOperationRule));
+			return std::make_unique<InstructionAssignment>(
+				make_assign_operator(n[1]),
+				make_value(n[2]),
+				make_value(n[0])
+			);
+		}
+
+		ptr<InstructionCompareJump> convert_instruction_cjump_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionCJumpRule));
+			return std::make_unique<InstructionCompareJump>(
+				convert_comparison_operator_rule(n[1]),
+				make_value(n[0]),
+				make_value(n[2]),
+				convert_label_rule(n[3])
+			);
+		}
+
+		ptr<InstructionLabel> convert_instruction_label_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionLabelRule));
+			return std::make_unique<InstructionLabel>(convert_label_rule(n[0]));
+		}
+
+		ptr<InstructionGoto> convert_instruction_goto_label_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionGotoLabelRule));
+			return std::make_unique<InstructionGoto>(convert_label_rule(n[0]));
+		}
+
+		std::unique_ptr<InstructionCall> make_instruction_call(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionFunctionCallRule)
+				|| *n.rule == typeid(rules::InstructionStdCallRule));
+			return std::make_unique<InstructionCall>(
+				make_value(n[0]),
+				utils::string_view_to_int<int64_t>(n[1].string_view())
+			);
+		}
+
+		std::unique_ptr<InstructionAssignment> convert_instruction_increment_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionIncrementRule));
+			return std::make_unique<InstructionAssignment>(
+				AssignOperator::add,
+				std::make_unique<NumberLiteral>(1),
+				make_value(n[0])
+			);
+		}
+
+		std::unique_ptr<InstructionAssignment> convert_instruction_decrement_rule(const ParseNode &n){
+			assert(*n.rule == typeid(rules::InstructionDecrementRule));
+			return std::make_unique<InstructionAssignment>(
+				AssignOperator::subtract,
+				std::make_unique<NumberLiteral>(1),
+				make_value(n[0])
+			);
+		}
+
+		std::unique_ptr<InstructionLeaq> convert_instruction_lea_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionLeaRule));
+			return std::make_unique<InstructionLeaq>(
+				make_value(n[0]),
+				make_value(n[1]),
+				make_value(n[2]),
+				utils::string_view_to_int<int64_t>(n[3].string_view())
+			);
+		}
+
+		std::unique_ptr<Instruction> make_instruction(const ParseNode &n) {
+			const std::type_info &rule = *n.rule;
+			if (rule == typeid(rules::InstructionAssignmentCompareRule)) {
+				return convert_instruction_assignment_compare(n);
+			} else if (
+				rule == typeid(rules::InstructionAssignmentRule)
+				|| rule == typeid(rules::InstructionMemoryReadRule)
+				|| rule == typeid(rules::InstructionMemoryWriteRule)
+				|| rule == typeid(rules::InstructionStackArgRule)
+			) {
+				return make_pure_instruction_assignment(n);
+			} else if (
+				rule == typeid(rules::InstructionPlusReadMemoryRule)
+				|| rule == typeid(rules::InstructionPlusWriteMemoryRule)
+			) {
+				return make_plus_instruction_assignment(n);
+			} else if (
+				rule == typeid(rules::InstructionMinusReadMemoryRule)
+				|| rule == typeid(rules::InstructionMinusWriteMemoryRule)
+			) {
+				return make_minus_instruction_assignment(n);
+			} else if (rule == typeid(rules::InstructionReturnRule)) {
+				return convert_instruction_return_rule(n);
+			} else if (
+				rule == typeid(rules::InstructionArithmeticOperationRule)
+				|| rule == typeid(rules::InstructionShiftOperationRule)
+			) {
+				return make_custom_op_instruction_assignment(n);
+			} else if (rule == typeid(rules::InstructionCJumpRule)) {
+				return convert_instruction_cjump_rule(n);
+			} else if (rule == typeid(rules::InstructionLabelRule)) {
+				return convert_instruction_label_rule(n);
+			} else if (rule == typeid(rules::InstructionGotoLabelRule)) {
+				return convert_instruction_goto_label_rule(n);
+			} else if (
+				rule == typeid(rules::InstructionFunctionCallRule)
+				|| rule == typeid(rules::InstructionStdCallRule)
+			) {
+				return make_instruction_call(n);
+			} else if (rule == typeid(rules::InstructionIncrementRule)) {
+				return convert_instruction_increment_rule(n);
+			} else if (rule == typeid(rules::InstructionDecrementRule)) {
+				return convert_instruction_decrement_rule(n);
+			} else if (rule == typeid(rules::InstructionLeaRule)) {
+				return convert_instruction_lea_rule(n);
+			} else {
+				std::cerr << "Cannot make Instruction from this parse node.";
+				exit(1);
+			}
+		}
+
+		std::vector<std::unique_ptr<Instruction>> convert_instructions_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionsRule));
+			std::vector<std::unique_ptr<Instruction>> result;
+			for (const auto &child : n.children) {
+				result.push_back(make_instruction(*child));
+			}
+			return result;
+		}
+
+		ptr<Function> make_function(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::FunctionRule));
+			return std::make_unique<Function>(
+				convert_function_name_rule(n[0]),
+				convert_number_rule(n[1]),
+				convert_instructions_rule(n[2])
+			);
+		}
+
+		std::vector<ptr<Function>> convert_functions_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::FunctionsRule));
+			std::vector<ptr<Function>> result;
+			for (const auto &child : n.children) {
+				result.push_back(make_function(*child));
+			}
+			return result;
+		}
+
+		std::unique_ptr<Program> convert_program_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::ProgramRule));
+			return std::make_unique<Program>(
+				convert_function_name_rule(n[0]),
+				convert_functions_rule(n[1])
+			);
+		}
 	}
 
 	std::unique_ptr<Program> parse_file(char *fileName, std::optional<std::string> parse_tree_output) {
@@ -659,9 +948,7 @@ namespace L2::parser {
 				}
 			}
 
-			// return node_processor::make_program(*root->children[0])
-
-			// std::cout << "the first node is of type " << root->children[0]->rule->name() << "\n";
+			return node_processor::convert_program_rule((*root)[0]);
 		}
 		return {};
 	}
