@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <iostream>
 #include <string_view>
 
 namespace L2::program {
@@ -265,6 +266,8 @@ namespace L2::program {
 			num_arguments {std::move(num_arguments)},
 			instructions {std::move(instructions)}
 		{}
+
+		std::string to_string() const;
 	};
 
 	struct Program {
@@ -278,5 +281,7 @@ namespace L2::program {
 			entry_function {std::move(entry_function)},
 			functions {std::move(functions)}
 		{}
+
+		std::string to_string() const;
 	};
 }

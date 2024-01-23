@@ -614,12 +614,7 @@ namespace L2::parser {
 		}
 
 		const ParseNode &operator[](int index) const {
-			try {
-				return *this->children.at(index);
-			} catch (std::out_of_range &e) {
-				std::cout << this->type << "!!!!!!!!!!!";
-				throw e;
-			}
+			return *this->children.at(index);
 		}
 
 		// methods used to display the parse tree

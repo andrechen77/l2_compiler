@@ -47,17 +47,17 @@ namespace L2::program {
 	}
 
 	std::string LabelLocation::to_string() const {
-		return this->label_name;
+		return ":" + this->label_name;
 	}
 
 	std::string Variable::to_string() const {
-		return this->var_name;
+		return "%" + this->var_name;
 	}
 
 	std::string FunctionRef::to_string() const {
 		std::string result;
-		if (this->is_std) {
-			result += "std::";
+		if (!this->is_std) {
+			result += "@";
 		}
 		result += this->function_name;
 		return result;
@@ -88,8 +88,8 @@ namespace L2::program {
 	}
 
 	std::string InstructionAssignment::to_string() const {
-		return this->source->to_string() + " " + program::to_string(this->op)
-			+ " " + this->destination->to_string();
+		return this->destination->to_string() + " " + program::to_string(this->op)
+			+ " " + this->source->to_string();
 	}
 
 	std::string to_string(ComparisonOperator op){
@@ -125,7 +125,7 @@ namespace L2::program {
 	}
 
 	std::string InstructionLabel::to_string() const {
-		return ":" + this->label->to_string();
+		return this->label->to_string();
 	}
 
 	std::string InstructionGoto::to_string() const {
@@ -133,11 +133,29 @@ namespace L2::program {
 	}
 
 	std::string InstructionCall::to_string() const {
-		return "call " + this->callee->to_string() + std::to_string(this->num_arguments);
+		return "call " + this->callee->to_string() + " " + std::to_string(this->num_arguments);
 	}
 
 	std::string InstructionLeaq::to_string() const {
 		return this->destination->to_string() + " @ " + this->base->to_string()
 			+ " " + this->base->to_string() + " " + std::to_string(this->scale);
+	}
+
+	std::string Function::to_string() const {
+		std::string result = "(" + this->name->to_string() + " " + this->num_arguments->to_string();
+		for (const auto &inst : this->instructions) {
+			result += "\n" + inst->to_string();
+		}
+		result += "\n)";
+		return result;
+	}
+
+	std::string Program::to_string() const {
+		std::string result = "(" + this->entry_function->to_string();
+		for (const auto &function : this->functions) {
+			result += "\n" + function->to_string();
+		}
+		result += "\n)";
+		return result;
 	}
 }
