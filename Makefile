@@ -1,19 +1,21 @@
-CPP_FILES			   	:= $(wildcard src/*.cpp)
-CPP_FILES_CC  	 	:= $(filter-out src/interpreter.cpp,$(CPP_FILES))
-CPP_FILES_INTERP 	:= $(filter-out src/compiler.cpp,$(CPP_FILES))
-OBJ_FILES			   	:= $(addprefix obj/,$(notdir $(CPP_FILES:.cpp=.o)))
-OBJ_FILES_CC		 	:= $(addprefix obj/,$(notdir $(CPP_FILES_CC:.cpp=.o)))
-OBJ_FILES_INTERP 	:= $(addprefix obj/,$(notdir $(CPP_FILES_INTERP:.cpp=.o)))
-CC_FLAGS			   	:= --std=c++17 -I./src -I../lib/PEGTL/include -I../lib -g3 -DDEBUG -pedantic -pedantic-errors -Werror=pedantic
-LD_FLAGS		   	 	:=
-CC								:= g++
-PL_CLASS          := L2
-DST_PL_CLASS      := L1
-EXT_CLASS					:= $(PL_CLASS)
-COMPILER					:= bin/$(PL_CLASS)
-INTERP        		:= bin/$(PL_CLASS)i
-OPT_LEVEL         :=
-CC_CLASS					:= $(PL_CLASS)c
+SRC_DIRS := $(wildcard src/**/)
+CPP_FILES := $(wildcard src/**/*.cpp) $(wildcard src/*.cpp)
+CPP_FILES_CC := $(filter-out src/interpreter.cpp,$(CPP_FILES))
+CPP_FILES_INTERP := $(filter-out src/compiler.cpp,$(CPP_FILES))
+OBJ_DIRS := $(patsubst src/%,obj/%,$(SRC_DIRS))
+OBJ_FILES := $(patsubst src/%.cpp,obj/%.o,$(CPP_FILES))
+OBJ_FILES_CC := $(patsubst src/%.cpp,obj/%.o,$(CPP_FILES_CC))
+OBJ_FILES_INTERP := $(patsubst src/%.cpp,obj/%.o,$(CPP_FILES_INTERP))
+CC_FLAGS := --std=c++17 -I./src -I../lib/PEGTL/include -I../lib -g3 -DDEBUG -pedantic -pedantic-errors -Werror=pedantic
+LD_FLAGS :=
+CC := g++
+PL_CLASS := L2
+DST_PL_CLASS := L1
+EXT_CLASS := $(PL_CLASS)
+COMPILER := bin/$(PL_CLASS)
+INTERP := bin/$(PL_CLASS)i
+OPT_LEVEL :=
+CC_CLASS := $(PL_CLASS)c
 
 runc: compiler
 	-./L2c -p graph.txt my_tests/scratch.L2
@@ -25,9 +27,9 @@ all: dirs $(COMPILER) $(INTERP)
 
 interp: dirs $(INTERP)
 
-dirs: obj bin
+dirs: $(OBJ_DIRS) bin
 
-obj:
+$(OBJ_DIRS):
 	mkdir -p $@
 
 bin:

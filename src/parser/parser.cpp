@@ -1,3 +1,5 @@
+#include "program/L2.h"
+#include "parser.h"
 #include <sched.h>
 #include <string>
 #include <vector>
@@ -11,15 +13,11 @@
 #include <stdint.h>
 #include <assert.h>
 #include <fstream>
-
 #include <tao/pegtl.hpp>
 #include <tao/pegtl/contrib/analyze.hpp>
 #include <tao/pegtl/contrib/raw_string.hpp>
 #include <tao/pegtl/contrib/parse_tree.hpp>
 #include <tao/pegtl/contrib/parse_tree_to_dot.hpp>
-
-#include <L2.h>
-#include <parser.h>
 
 namespace pegtl = TAO_PEGTL_NAMESPACE;
 
