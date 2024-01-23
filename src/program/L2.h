@@ -32,7 +32,9 @@ namespace L2::program {
 		std::unique_ptr<Value> base;
 		int64_t offset;
 
-		MemoryLocation(std::unique_ptr<Value> &&base, int64_t offset);
+		MemoryLocation(std::unique_ptr<Value> &&base, int64_t offset) :
+			base {std::move(base)}, offset {offset}
+		{}
 
 		virtual std::string to_string() const override;
 	};
@@ -40,7 +42,7 @@ namespace L2::program {
 	struct NumberLiteral : Value {
 		int64_t value;
 
-		NumberLiteral(int64_t value);
+		NumberLiteral(int64_t value) : value {value} {}
 
 		virtual std::string to_string() const override;
 	};
@@ -48,7 +50,7 @@ namespace L2::program {
 	struct LabelLocation : Value {
 		std::string label_name;
 
-		LabelLocation(const std::string_view &labelName);
+		LabelLocation(const std::string_view &labelName) : label_name {label_name} {}
 
 		virtual std::string to_string() const override;
 	};
@@ -56,7 +58,7 @@ namespace L2::program {
 	struct Variable : Value {
 		std::string var_name;
 
-		Variable(const std::string_view &var_name);
+		Variable(const std::string_view &var_name) : var_name {var_name} {}
 
 		virtual std::string to_string() const override;
 	};
@@ -65,12 +67,33 @@ namespace L2::program {
 		std::string function_name;
 		bool is_std;
 
-		FunctionRef(const std::string_view &var_name, bool is_std);
+		FunctionRef(const std::string_view &var_name, bool is_std) :
+			function_name {function_name},
+			is_std {is_std}
+		{}
 
 		virtual std::string to_string() const override;
 	};
 
-	class InstructionVisitor;
+	struct InstructionReturn;
+	struct InstructionAssignment;
+	struct InstructionCompareAssignment;
+	struct InstructionCompareJump;
+	struct InstructionGoto;
+	struct InstructionCall;
+	struct InstructionLeaq;
+
+	class InstructionVisitor {
+		public:
+
+		virtual void visit(InstructionReturn &inst) = 0;
+		virtual void visit(InstructionAssignment &inst) = 0;
+		virtual void visit(InstructionCompareAssignment &inst) = 0;
+		virtual void visit(InstructionCompareJump &inst) = 0;
+		virtual void visit(InstructionGoto &inst) = 0;
+		virtual void visit(InstructionCall &inst) = 0;
+		virtual void visit(InstructionLeaq &inst) = 0;
+	};
 
 	struct Instruction {
 		virtual std::string to_string() const = 0;
@@ -79,7 +102,7 @@ namespace L2::program {
 
 	struct InstructionReturn : Instruction {
 		virtual std::string to_string() const override;
-		virtual void accept(InstructionVisitor &v) override;
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
 	enum struct AssignOperator {
@@ -103,10 +126,12 @@ namespace L2::program {
 			AssignOperator op,
 			std::unique_ptr<Value> &&source,
 			std::unique_ptr<Value> &&destination
-		);
+		) :
+			op { op }, source { std::move(source) }, destination { std::move(destination )}
+		{}
 
 		virtual std::string to_string() const override;
-		virtual void accept(InstructionVisitor &v) override;
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
 	enum struct ComparisonOperator {
@@ -128,10 +153,15 @@ namespace L2::program {
 			ComparisonOperator op,
 			std::unique_ptr<Value> &&lhs,
 			std::unique_ptr<Value> &&rhs
-		);
+		) :
+			destination {std::move(destination)},
+			op {op},
+			lhs {std::move(lhs)},
+			rhs {std::move(rhs)}
+		{}
 
 		virtual std::string to_string() const override;
-		virtual void accept(InstructionVisitor &v) override;
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
 	struct InstructionCompareJump : Instruction {
@@ -145,29 +175,34 @@ namespace L2::program {
 			std::unique_ptr<Value> &&lhs,
 			std::unique_ptr<Value> &&rhs,
 			std::unique_ptr<LabelLocation> label
-		);
+		):
+			op {op}, lhs{std::move(lhs)}, rhs{std::move(rhs)}, label{std::move(label)}
+		{}
 
 		virtual std::string to_string() const override;
-		virtual void accept(InstructionVisitor &v) override;
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
 	struct InstructionGoto : Instruction {
 		std::unique_ptr<LabelLocation> label;
 
-		InstructionGoto(std::unique_ptr<LabelLocation> &&label);
+		InstructionGoto(std::unique_ptr<LabelLocation> &&label) : label {std::move(label)} {}
 
 		virtual std::string to_string() const override;
-		virtual void accept(InstructionVisitor &v) override;
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
 	struct InstructionCall : Instruction {
 		std::unique_ptr<Value> callee;
 		int64_t num_arguments; // specified by user, doesn't necessarily match function's actual num args
 
-		InstructionCall(std::unique_ptr<Value> &&callee, int64_t num_arguments);
+		InstructionCall(std::unique_ptr<Value> &&callee, int64_t num_arguments) :
+			callee {std::move(callee)},
+			num_arguments {num_arguments}
+		{}
 
 		virtual std::string to_string() const override;
-		virtual void accept(InstructionVisitor &v) override;
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
 	struct InstructionLeaq : Instruction {
@@ -181,23 +216,15 @@ namespace L2::program {
 			std::unique_ptr<Value> &&base,
 			std::unique_ptr<Value> &&offset,
 			int64_t scale
-		);
+		) :
+			destination {std::move(destination)},
+			base {std::move(base)},
+			offset {std::move(offset)},
+			scale {scale}
+		{}
 
 		virtual std::string to_string() const override;
-		virtual void accept(InstructionVisitor &v) override;
-	};
-
-	class InstructionVisitor {
-		public:
-
-		virtual void visit(InstructionReturn &inst) = 0;
-		virtual void visit(InstructionAssignment &inst) = 0;
-		virtual void visit(InstructionCompareAssignment &inst) = 0;
-		virtual void visit(InstructionCompareJump &inst) = 0;
-		virtual void visit(InstructionGoto &inst) = 0;
-		virtual void visit(InstructionCall &inst) = 0;
-		virtual void visit(InstructionLeaq &inst) = 0;
-		// TODO add visit methods for all instructions here
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
 	struct Program {};
