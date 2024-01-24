@@ -35,11 +35,21 @@ namespace L2::program {
 		return reg_id_to_str[static_cast<int>(this->id)];
 	}
 
-	std::set<std::string> Register::get_read_vars() const {
+	std::set<std::string> Register::get_vars_on_read() const {
+		if (this->id == RegisterID::rsp) {
+			return {};
+		}
 		return {reg_id_to_str[static_cast<int>(this->id)]};
 	}
-	std::set<std::string> Register::get_write_vars() const {
-		return {reg_id_to_str[static_cast<int>(this->id)]};
+	std::set<std::string> Register::get_vars_on_write(bool get_read_vars) const {
+		if (this->id == RegisterID::rsp) {
+			return {};
+		}
+		if (get_read_vars) {
+			return {};
+		} else {
+			return {reg_id_to_str[static_cast<int>(this->id)]};
+		}
 	}
 
 	std::string StackArg::to_string() const {
@@ -50,11 +60,16 @@ namespace L2::program {
 		return "mem " + this->base->to_string() + " " + this->offset->to_string();
 	}
 
-	std::set<std::string> MemoryLocation::get_read_vars() const {
-		return this->base->get_read_vars();
+	std::set<std::string> MemoryLocation::get_vars_on_read() const {
+		return this->base->get_vars_on_read();
 	}
-	std::set<std::string> MemoryLocation::get_write_vars() const {
-		return this->base->get_read_vars();
+	std::set<std::string> MemoryLocation::get_vars_on_write(bool get_read_vars) const {
+		// the base is read even if this MemoryLocation is being written
+		if (get_read_vars) {
+			return this->base->get_vars_on_read();
+		} else {
+			return {};
+		}
 	}
 
 	std::string NumberLiteral::to_string() const {
@@ -69,11 +84,15 @@ namespace L2::program {
 		return "%" + this->var_name;
 	}
 
-	std::set<std::string> Variable::get_read_vars() const {
-		return {this->var_name};
+	std::set<std::string> Variable::get_vars_on_read() const {
+		return {"%" + this->var_name};
 	}
-	std::set<std::string> Variable::get_write_vars() const {
-		return {this->var_name};
+	std::set<std::string> Variable::get_vars_on_write(bool get_read_vars) const {
+		if (get_read_vars) {
+			return {};
+		} else {
+			return {"%" + this->var_name};
+		}
 	}
 
 	std::string FunctionRef::to_string() const {

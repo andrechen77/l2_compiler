@@ -81,7 +81,7 @@ int main(
 	} else if (liveness_only) {
 		// Parse an L2 function.
 		std::unique_ptr<L2::program::Function> f = L2::parser::parse_function_file(argv[optind]);
-		std::cout << f->to_string();
+		// std::cout << f->to_string();
 		std::map<L2::program::Instruction *, L2::program::analyze::InstructionAnalysisResult> liveness_results
 			= L2::program::analyze::analyze_instructions(*f);
 

@@ -3,6 +3,18 @@
 #include <iostream>
 
 namespace L2::program::analyze {
+	const std::set<std::string> caller_saved_registers {
+		"rax", "rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11"
+	};
+
+	const std::vector<std::string> argument_registers {
+		"rdi", "rsi", "rdx", "rcx", "r8", "r9"
+	};
+
+	const std::set<std::string> callee_saved_registers {
+		"r12", "r13", "r14", "r15", "rbp", "rbx"
+	};
+
 	// Accumulates a map<Instruction *, InstructionAnalysisResult> with only the
 	// successors, gen_set, and kill_set fields filled out.
 	// ASSUMES THAT YOU ITERATE THROUGH THE INSTRUCTIONS IN ORDER STARTING WITH
@@ -25,76 +37,112 @@ namespace L2::program::analyze {
 		}
 
 		virtual void visit(InstructionReturn &inst) override {
-			accum[&inst].gen_set = {"rax", "rbx", "rbp", "r12", "r13", "r14", "r15"};
+			InstructionAnalysisResult &entry = accum[&inst];
+			entry.gen_set = callee_saved_registers;
+			entry.gen_set.insert("rax");
 			index++;
 		}
 		virtual void visit(InstructionAssignment &inst) override {
-			accum[&inst].successors.push_back(target.instructions[index + 1].get());
-			accum[&inst].kill_set = inst.source->get_write_vars();
-			accum[&inst].gen_set = inst.destination->get_read_vars();
+			InstructionAnalysisResult &entry = accum[&inst];
+
+			entry.successors.push_back(target.instructions[index + 1].get());
+
+			entry.kill_set = inst.destination->get_vars_on_write(false);
+
+			entry.gen_set = inst.source->get_vars_on_read();
+			entry.gen_set.merge(inst.destination->get_vars_on_write(true));
+			if (inst.op != AssignOperator::pure) {
+				// also reads from the destination
+				entry.gen_set.merge(inst.destination->get_vars_on_read());
+			}
+
 			index++;
 		}
 		virtual void visit(InstructionCompareAssignment &inst) override {
-			accum[&inst].successors.push_back(target.instructions[index + 1].get());
-			accum[&inst].kill_set = inst.destination->get_write_vars();
-			accum[&inst].gen_set = inst.lhs->get_read_vars();
+			InstructionAnalysisResult &entry = accum[&inst];
 
+			entry.successors.push_back(target.instructions[index + 1].get());
 
-			const auto &temp = inst.rhs->get_read_vars();
-			accum[&inst].gen_set.insert(temp.begin(), temp.end());
+			entry.kill_set = inst.destination->get_vars_on_write(false);
+
+			entry.gen_set = inst.lhs->get_vars_on_read();
+			entry.gen_set.merge(inst.rhs->get_vars_on_read());
+
 			++index;
 		}
 		virtual void visit(InstructionCompareJump &inst) override {
-			accum[&inst].successors.push_back(target.instructions[index + 1].get());
-			std::string target_label = ":" + inst.label->to_string();
-			for(auto &i : target.instructions){
+			InstructionAnalysisResult &entry = accum[&inst];
+
+			entry.successors.push_back(target.instructions[index + 1].get());
+			std::string target_label = inst.label->to_string();
+			for (auto &i : target.instructions){
 				if (i->to_string() == target_label){ // JANK
-					accum[&inst].successors.push_back(i.get());
+					entry.successors.push_back(i.get());
 					break;
 				}
 			}
-			accum[&inst].gen_set = inst.lhs->get_read_vars();
-			accum[&inst].gen_set = inst.rhs->get_read_vars();
+
+			entry.gen_set = inst.lhs->get_vars_on_read();
+			entry.gen_set.merge(inst.rhs->get_vars_on_read());
+
 			++index;
 		}
 		virtual void visit(InstructionLabel &inst) override {
-			accum[&inst].successors.push_back(target.instructions[index + 1].get());
+			InstructionAnalysisResult &entry = accum[&inst];
+			entry.successors.push_back(target.instructions[index + 1].get());
 			++index;
 		}
 		virtual void visit(InstructionGoto &inst) override {
-			std::string target_label = ":" + inst.label->to_string();
+			InstructionAnalysisResult &entry = accum[&inst];
+			std::string target_label = inst.label->to_string();
 			for (auto &i : target.instructions) {
 				if (i->to_string() == target_label){ // JANK
-					accum[&inst].successors.push_back(i.get());
+					entry.successors.push_back(i.get());
 					break;
 				}
 			}
 			++index;
 		}
 		virtual void visit(InstructionCall &inst) override {
-			accum[&inst].gen_set = inst.callee->get_read_vars();
+			InstructionAnalysisResult &entry = accum[&inst];
+			entry.gen_set = inst.callee->get_vars_on_read();
+			for (int i = 0; i < inst.num_arguments && i < argument_registers.size(); ++i) {
+				entry.gen_set.insert(argument_registers[i]);
+			}
+			entry.kill_set = caller_saved_registers;
   			std::string type_call = inst.callee->to_string();
 			static std::set<std::string> nosucC = {"tuple-error", "tensor-error"};
 			if (nosucC.find(type_call) == nosucC.end()){
-				accum[&inst].successors.push_back(target.instructions[index + 1].get());
+				entry.successors.push_back(target.instructions[index + 1].get());
 			}
 			++index;
 		}
 		virtual void visit(InstructionLeaq &inst) override {
-			accum[&inst].successors.push_back(target.instructions[index + 1].get());
-			accum[&inst].kill_set = inst.destination->get_write_vars();
-			accum[&inst].gen_set = inst.base->get_read_vars();
-			accum[&inst].gen_set = inst.offset->get_read_vars();
+			InstructionAnalysisResult &entry = accum[&inst];
+
+			entry.successors.push_back(target.instructions[index + 1].get());
+
+			entry.kill_set = inst.destination->get_vars_on_write(false);
+
+			entry.gen_set = inst.base->get_vars_on_read();
+			entry.gen_set.merge(inst.offset->get_vars_on_read());
+			entry.gen_set.merge(inst.destination->get_vars_on_write(true));
+
 			index++;
 		}
 	};
 
-	void kevin(const std::set<std::string> &bob) {
-		std::cout << "{";
+	std::string resized(std::string s, std::size_t length = 30) {
+		s.resize(length, ' ');
+		return s;
+	}
+
+	std::string kevin(const std::set<std::string> &bob) {
+		std::string result =  "{";
 		for (const std::string &str : bob) {
-			std::cout << str << ", ";
+			result += str + ", ";
 		}
-		std::cout << "}\n";
+		return result + "}";
 	}
 
 	std::map<Instruction *, InstructionAnalysisResult> analyze_instructions(const Function &function) {
@@ -111,14 +159,27 @@ namespace L2::program::analyze {
 		// This initially satisfies the in set's constraints.
 		for (const std::unique_ptr<Instruction> &inst : function.instructions) {
 			InstructionAnalysisResult &entry = resol[inst.get()];
-			entry.out_set = entry.gen_set;
-			kevin(entry.out_set);
+			entry.in_set = entry.gen_set;
+			// std::cerr << resized(inst->to_string(), 30) << "\t";
+			// std::cerr << kevin(entry.in_set) << "\n";
+			// for (Instruction *succ : entry.successors) {
+			// 	std::cerr << "\t" << succ->to_string() << "\n";
+			// }
 		}
-		std::cout << "initialized with gen sets\n";
 		bool sets_changed;
 		do {
+
 			sets_changed = false;
 			for (int i = num_instructions - 1; i >= 0; --i) {
+				// for (const auto &inst : function.instructions) {
+				// 	InstructionAnalysisResult &entry = resol[inst.get()];
+				// 	std::cerr << resized(inst->to_string(), 50) << " ";
+				// 	std::cerr << resized(kevin(entry.in_set), 50) << " " << resized(kevin(entry.out_set), 50) << "\n";
+				// }
+				// std::string pog;
+				// std::cin >> pog;
+				// std::cerr << "continuing\n";
+
 				InstructionAnalysisResult &entry = resol[function.instructions[i].get()];
 
 				// out[i] = UNION (s in successors(i)) {in[s]}
@@ -129,14 +190,6 @@ namespace L2::program::analyze {
 					}
 				}
 				if (entry.out_set != new_out_set) {
-					std::cout << "In=====" << function.instructions[i]->to_string() << "\n";
-					kevin(entry.out_set);
-					std::cout << entry.out_set.size() << "\n";
-					kevin(new_out_set);
-					std::cout << new_out_set.size() << "\n";
-					if (entry.out_set.size() == 0 && new_out_set.size() == 0) {
-						std::cout << "WHAT THE ACTUAL FUCK\n";
-					}
 					sets_changed = true;
 					entry.out_set = std::move(new_out_set);
 				}
@@ -163,15 +216,6 @@ namespace L2::program::analyze {
 					}
 				}
 				if (entry.in_set != new_in_set) {
-					std::cout << "Ou=====" << function.instructions[i]->to_string() << "\n";
-					kevin(entry.in_set);
-					std::cout << entry.in_set.size() << "\n";
-					kevin(new_in_set);
-					std::cout << new_in_set.size() << "\n";
-					if (entry.in_set.size() == 0 && new_in_set.size() == 0) {
-						std::cout << "WHAT THE ACTUAL FUCK\n";
-					}
-
 					sets_changed = true;
 					entry.in_set = std::move(new_in_set);
 				}
@@ -182,8 +226,7 @@ namespace L2::program::analyze {
 	}
 
 	void printDaLiveness(const Function &function, std::map<Instruction *, InstructionAnalysisResult> &liveness_results){
-		std::cerr << "printing da liveness";
-		std::cout << "(\n (in\n";
+		std::cout << "(\n(in\n";
 		for (const auto &instruction : function.instructions) {
 			const InstructionAnalysisResult &entry = liveness_results[instruction.get()];
 			std::cout << "(";
@@ -193,7 +236,7 @@ namespace L2::program::analyze {
 			std::cout << ")\n";
 		}
 
-		std::cout << "(out\n";
+		std::cout << ")\n\n(out\n";
 		// print out sets
 		for (const auto &instruction : function.instructions) {
 			const InstructionAnalysisResult &entry = liveness_results[instruction.get()];
@@ -203,6 +246,6 @@ namespace L2::program::analyze {
     		}
 			std::cout << ")\n";
 		}
-		std::cout << ")\n";
+		std::cout << ")\n\n)\n";
 	}
 }

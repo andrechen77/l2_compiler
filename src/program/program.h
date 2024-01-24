@@ -21,10 +21,13 @@ namespace L2::program {
 
 	struct Value {
 		virtual std::string to_string() const = 0;
-		virtual std::set<std::string> get_read_vars() const {
+
+		// which sub-values are read when this Value is read
+		virtual std::set<std::string> get_vars_on_read() const {
 			return std::set<std::string>();
 		}
-		virtual std::set<std::string> get_write_vars() const {
+		// which sub-values are read/written when this Value is written
+		virtual std::set<std::string> get_vars_on_write(bool get_read_vars) const {
 			return std::set<std::string>();
 		}
 	};
@@ -35,8 +38,8 @@ namespace L2::program {
 		Register(const std::string_view &id);
 
 		virtual std::string to_string() const override;
-		virtual std::set<std::string> get_read_vars() const override;
-		virtual std::set<std::string> get_write_vars() const override;
+		virtual std::set<std::string> get_vars_on_read() const override;
+		virtual std::set<std::string> get_vars_on_write(bool get_read_vars) const override;
 
 	};
 
@@ -65,8 +68,8 @@ namespace L2::program {
 		{}
 
 		virtual std::string to_string() const override;
-		virtual std::set<std::string> get_read_vars() const override;
-		virtual std::set<std::string> get_write_vars() const override;
+		virtual std::set<std::string> get_vars_on_read() const override;
+		virtual std::set<std::string> get_vars_on_write(bool get_read_vars) const override;
 	};
 
 	struct LabelLocation : Value {
@@ -92,8 +95,8 @@ namespace L2::program {
 		Variable(const std::string_view &var_name) : var_name {var_name} {}
 
 		virtual std::string to_string() const override;
-		virtual std::set<std::string> get_read_vars() const override;
-		virtual std::set<std::string> get_write_vars() const override;
+		virtual std::set<std::string> get_vars_on_read() const override;
+		virtual std::set<std::string> get_vars_on_write(bool get_read_vars) const override;
 	};
 
 	struct FunctionRef : Value {
