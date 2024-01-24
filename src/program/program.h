@@ -105,6 +105,11 @@ namespace L2::program {
 			is_std {is_std}
 		{}
 
+		FunctionRef(const FunctionRef &other) :
+			function_name {other.function_name},
+			is_std {other.is_std}
+		{}
+
 		virtual std::string to_string() const override;
 	};
 

@@ -15,4 +15,6 @@ namespace L2::program::analyze {
 	};
 
 	std::map<Instruction *, InstructionAnalysisResult> analyze_instructions(const Function &function);
+
+	void printDaLiveness(const Function &function, std::map<Instruction *, InstructionAnalysisResult> &liveness_results);
 }

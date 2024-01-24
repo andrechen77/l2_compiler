@@ -947,8 +947,13 @@ namespace L2::parser {
 		}
 		return {};
 	}
-	std::unique_ptr<Program> parse_function_file(char *fileName) {
-		exit(1);
+	std::unique_ptr<Function> parse_function_file(char *fileName) {
+		pegtl::file_input<> fileInput(fileName);
+		auto root = pegtl::parse_tree::parse<pegtl::must<rules::FunctionRule>, ParseNode, rules::Selector>(fileInput);
+		if (root) {
+			return node_processor::make_function((*root)[0]);
+		}
+		return {};
 	}
 	std::unique_ptr<Program> parse_spill_file(char *fileName) {
 		exit(1);

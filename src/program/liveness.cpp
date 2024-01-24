@@ -1,9 +1,8 @@
 #include "liveness.h"
+#include <string>
+#include <iostream>
 
 namespace L2::program::analyze {
-	using std::map;
-	using std::vector;
-
 	// Accumulates a map<Instruction *, InstructionAnalysisResult> with only the
 	// successors, gen_set, and kill_set fields filled out.
 	// ASSUMES THAT YOU ITERATE THROUGH THE INSTRUCTIONS IN ORDER STARTING WITH
@@ -90,6 +89,14 @@ namespace L2::program::analyze {
 		}
 	};
 
+	void kevin(const std::set<std::string> &bob) {
+		std::cout << "{";
+		for (const std::string &str : bob) {
+			std::cout << str << ", ";
+		}
+		std::cout << "}\n";
+	}
+
 	std::map<Instruction *, InstructionAnalysisResult> analyze_instructions(const Function &function) {
 		auto num_instructions = function.instructions.size();
 
@@ -105,7 +112,9 @@ namespace L2::program::analyze {
 		for (const std::unique_ptr<Instruction> &inst : function.instructions) {
 			InstructionAnalysisResult &entry = resol[inst.get()];
 			entry.out_set = entry.gen_set;
+			kevin(entry.out_set);
 		}
+		std::cout << "initialized with gen sets\n";
 		bool sets_changed;
 		do {
 			sets_changed = false;
@@ -120,6 +129,14 @@ namespace L2::program::analyze {
 					}
 				}
 				if (entry.out_set != new_out_set) {
+					std::cout << "In=====" << function.instructions[i]->to_string() << "\n";
+					kevin(entry.out_set);
+					std::cout << entry.out_set.size() << "\n";
+					kevin(new_out_set);
+					std::cout << new_out_set.size() << "\n";
+					if (entry.out_set.size() == 0 && new_out_set.size() == 0) {
+						std::cout << "WHAT THE ACTUAL FUCK\n";
+					}
 					sets_changed = true;
 					entry.out_set = std::move(new_out_set);
 				}
@@ -145,7 +162,16 @@ namespace L2::program::analyze {
 						new_in_set.insert(var);
 					}
 				}
-				if (entry.in_set == new_in_set) {
+				if (entry.in_set != new_in_set) {
+					std::cout << "Ou=====" << function.instructions[i]->to_string() << "\n";
+					kevin(entry.in_set);
+					std::cout << entry.in_set.size() << "\n";
+					kevin(new_in_set);
+					std::cout << new_in_set.size() << "\n";
+					if (entry.in_set.size() == 0 && new_in_set.size() == 0) {
+						std::cout << "WHAT THE ACTUAL FUCK\n";
+					}
+
 					sets_changed = true;
 					entry.in_set = std::move(new_in_set);
 				}
@@ -153,5 +179,30 @@ namespace L2::program::analyze {
 		} while (sets_changed);
 
 		return resol;
+	}
+
+	void printDaLiveness(const Function &function, std::map<Instruction *, InstructionAnalysisResult> &liveness_results){
+		std::cerr << "printing da liveness";
+		std::cout << "(\n (in\n";
+		for (const auto &instruction : function.instructions) {
+			const InstructionAnalysisResult &entry = liveness_results[instruction.get()];
+			std::cout << "(";
+			for (auto element : entry.in_set) {
+        		std::cout << element << " ";
+    		}
+			std::cout << ")\n";
+		}
+
+		std::cout << "(out\n";
+		// print out sets
+		for (const auto &instruction : function.instructions) {
+			const InstructionAnalysisResult &entry = liveness_results[instruction.get()];
+			std::cout << "(";
+			for (auto element : entry.out_set) {
+        		std::cout << element << " ";
+    		}
+			std::cout << ")\n";
+		}
+		std::cout << ")\n";
 	}
 }
