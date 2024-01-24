@@ -5,6 +5,7 @@
 #include <string>
 #include <iostream>
 #include <string_view>
+#include <set>
 
 namespace L2::program {
 	enum struct RegisterID {
@@ -20,6 +21,12 @@ namespace L2::program {
 
 	struct Value {
 		virtual std::string to_string() const = 0;
+		virtual std::set<std::string> get_read_vars() const {
+			return std::set<std::string>();
+		}
+		virtual std::set<std::string> get_write_vars() const {
+			return std::set<std::string>();
+		}
 	};
 
 	struct Register : Value {
@@ -28,6 +35,9 @@ namespace L2::program {
 		Register(const std::string_view &id);
 
 		virtual std::string to_string() const override;
+		virtual std::set<std::string> get_read_vars() const override;
+		virtual std::set<std::string> get_write_vars() const override;
+
 	};
 
 	struct NumberLiteral : Value {
@@ -55,6 +65,8 @@ namespace L2::program {
 		{}
 
 		virtual std::string to_string() const override;
+		virtual std::set<std::string> get_read_vars() const override;
+		virtual std::set<std::string> get_write_vars() const override;
 	};
 
 	struct LabelLocation : Value {
@@ -65,12 +77,23 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 	};
 
+	/*
+	FUTURE: Instead of these containing the name of the variable itself (i hate strings),
+	we rename these to VariableRefs and have the, refer to a Variable contained
+	in the innermost Scope. A Scope is an object that is owned by something like
+	a Function which just describes all the names (such as variable names and
+	label names) within that scope. This happens during parsing.
+	Then we can have instruction analysis work with references to those Variable
+	objects instead of with strings (I hate strings)
+	*/
 	struct Variable : Value {
 		std::string var_name;
 
 		Variable(const std::string_view &var_name) : var_name {var_name} {}
 
 		virtual std::string to_string() const override;
+		virtual std::set<std::string> get_read_vars() const override;
+		virtual std::set<std::string> get_write_vars() const override;
 	};
 
 	struct FunctionRef : Value {

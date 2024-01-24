@@ -20,18 +20,26 @@ namespace L2::program {
 		id {str_to_reg_id.find(id)->second}
 	{}
 
+	static const std::string reg_id_to_str[] = {
+		"rax",
+		"rcx",
+		"rdx",
+		"rdi",
+		"rsi",
+		"r8",
+		"r9",
+		"rsp"
+	};
+
 	std::string Register::to_string() const {
-		static const std::string reg_id_to_str[] = {
-			"rax",
-			"rcx",
-			"rdx",
-			"rdi",
-			"rsi",
-			"r8",
-			"r9",
-			"rsp"
-		};
 		return reg_id_to_str[static_cast<int>(this->id)];
+	}
+
+	std::set<std::string> Register::get_read_vars() const {
+		return {reg_id_to_str[static_cast<int>(this->id)]};
+	}
+	std::set<std::string> Register::get_write_vars() const {
+		return {reg_id_to_str[static_cast<int>(this->id)]};
 	}
 
 	std::string StackArg::to_string() const {
@@ -40,6 +48,13 @@ namespace L2::program {
 
 	std::string MemoryLocation::to_string() const {
 		return "mem " + this->base->to_string() + " " + this->offset->to_string();
+	}
+
+	std::set<std::string> MemoryLocation::get_read_vars() const {
+		return this->base->get_read_vars();
+	}
+	std::set<std::string> MemoryLocation::get_write_vars() const {
+		return this->base->get_read_vars();
 	}
 
 	std::string NumberLiteral::to_string() const {
@@ -52,6 +67,13 @@ namespace L2::program {
 
 	std::string Variable::to_string() const {
 		return "%" + this->var_name;
+	}
+
+	std::set<std::string> Variable::get_read_vars() const {
+		return {this->var_name};
+	}
+	std::set<std::string> Variable::get_write_vars() const {
+		return {this->var_name};
 	}
 
 	std::string FunctionRef::to_string() const {
