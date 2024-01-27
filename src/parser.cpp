@@ -1,5 +1,5 @@
 #include "parser.h"
-#include "program/program.h"
+#include "program.h"
 #include "utils.h"
 #include <typeinfo>
 #include <sched.h>

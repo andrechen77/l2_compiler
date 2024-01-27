@@ -1,5 +1,5 @@
-#include "parser/parser.h"
-#include "program/liveness.h"
+#include "parser.h"
+#include "liveness.h"
 #include <string>
 #include <vector>
 #include <utility>
