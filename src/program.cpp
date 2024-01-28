@@ -5,43 +5,24 @@
 #include <charconv>
 
 namespace L2::program {
-	// TODO remove this
-	/* const std::map<std::string, RegisterID, std::less<void>> str_to_reg_id {
-		{ "rax", RegisterID::rax },
-		{ "rcx", RegisterID::rcx },
-		{ "rdx", RegisterID::rdx },
-		{ "rdi", RegisterID::rdi },
-		{ "rsi", RegisterID::rsi },
-		{ "r8", RegisterID::r8 },
-		{ "r9", RegisterID::r9 },
-		{ "rsp", RegisterID::rsp }
-	};
-
-	RegisterRef::RegisterRef(const std::string_view &id) :
-		id {str_to_reg_id.find(id)->second}
-	{}
-
-	static const std::string reg_id_to_str[] = {
-		"rax",
-		"rcx",
-		"rdx",
-		"rdi",
-		"rsi",
-		"r8",
-		"r9",
-		"rsp"
-	};
-	*/
-	std::string RegisterRef::to_string() const {
+	std::string_view RegisterRef::get_ref_name() const {
 		if (this->referent) {
 			return this->referent->name;
 		} else {
-			return std::string(this->free_name);
+			return this->free_name;
 		}
 	}
 
-	void RegisterRef::bind_all(Scope &fun_scope) {
-		*this = fun_scope.get_register_or_fail(this->free_name);
+	std::string RegisterRef::to_string() const {
+		return std::string(this->get_ref_name());
+	}
+
+	void RegisterRef::bind_all(AggregateScope &agg_scope) {
+		agg_scope.register_scope.add_ref(*this);
+	}
+
+	void RegisterRef::bind(Register *referent) {
+		this->referent = referent;
 	}
 
 	std::set<Variable *> RegisterRef::get_vars_on_read() const {
@@ -68,6 +49,7 @@ namespace L2::program {
 		free_name {},
 		referent {referent}
 	{}
+
 	RegisterRef::RegisterRef(const std::string_view &free_name) :
 		Expr(),
 		free_name {free_name},
@@ -95,6 +77,10 @@ namespace L2::program {
 		}
 	}
 
+	void MemoryLocation::bind_all(AggregateScope &agg_scope) {
+		this->base->bind_all(agg_scope);
+	}
+
 	std::string NumberLiteral::to_string() const {
 		return std::to_string(this->value);
 	}
@@ -104,29 +90,24 @@ namespace L2::program {
 		referent {nullptr}
 	{}
 
-	LabelRef::LabelRef(InstructionLabel *referent) :
-		free_name {},
-		referent {referent}
-	{}
-
-	void LabelRef::bind(InstructionLabel *referent) {
+	void LabelRef::bind(InstructionLabel **referent) {
 		this->referent = referent;
 	}
 
-	void LabelRef::bind_all(Scope &fun_scope){
-		fun_scope.add_pending_label_ref(this);
+	void LabelRef::bind_all(AggregateScope &agg_scope) {
+		agg_scope.label_scope.add_ref(*this);
 	}
 
-	std::string_view LabelRef::get_label_name() const {
+	std::string_view LabelRef::get_ref_name() const {
 		if (this->referent) {
-			return this->referent->label_name;
+			return (*this->referent)->label_name;
 		} else {
 			return this->free_name;
 		}
 	}
 
 	std::string LabelRef::to_string() const {
-		return ":" + std::string(this->get_label_name());
+		return ":" + std::string(this->get_ref_name());
 	}
 
 	VariableRef::VariableRef(const std::string_view &free_name) :
@@ -139,11 +120,15 @@ namespace L2::program {
 		referent {referent}
 	{}
 
-	void VariableRef::bind_all(Scope &fun_scope) {
-		*this = fun_scope.get_variable_create(this->free_name);
+	void VariableRef::bind_all(AggregateScope &agg_scope) {
+		this->bind(agg_scope.variable_scope.get_item_or_create(this->get_ref_name()));
 	}
 
-	std::string_view VariableRef::get_var_name() const {
+	void VariableRef::bind(Variable *referent) {
+		this->referent = referent;
+	}
+
+	std::string_view VariableRef::get_ref_name() const {
 		if (this->referent) {
 			return this->referent->name;
 		} else {
@@ -152,7 +137,7 @@ namespace L2::program {
 	}
 
 	std::string VariableRef::to_string() const {
-		return "%" + std::string(this->get_var_name());
+		return "%" + std::string(this->get_ref_name());
 	}
 
 	std::set<Variable *> VariableRef::get_vars_on_read() const {
@@ -172,13 +157,7 @@ namespace L2::program {
 		referent {nullptr}
 	{}
 
-	FunctionRef::FunctionRef(Function *referent) :
-		name {},
-		is_std {false},
-		referent {referent}
-	{}
-
-	void FunctionRef::bind(Function *referent) {
+	void FunctionRef::bind(Function **referent) {
 		if (this->is_std) {
 			std::cerr << "cannot bind a FunctionRef to an std function.\n";
 			exit(-1);
@@ -187,13 +166,13 @@ namespace L2::program {
 		this->referent = referent;
 	}
 
-	std::string_view FunctionRef::get_fun_name() const {
+	std::string_view FunctionRef::get_ref_name() const {
 		if (this->is_std) {
 			return this->name;
 		}
 
 		if (this->referent) {
-			return this->referent->name;
+			return (*this->referent)->name;
 		} else {
 			return this->name;
 		}
@@ -204,8 +183,12 @@ namespace L2::program {
 		if (!this->is_std) {
 			result += "@";
 		}
-		result += this->get_fun_name();
+		result += this->get_ref_name();
 		return result;
+	}
+
+	void FunctionRef::bind_all(AggregateScope &agg_scope) {
+		agg_scope.function_scope.add_ref(*this);
 	}
 
 	std::string InstructionReturn::to_string() const {
@@ -236,9 +219,9 @@ namespace L2::program {
 		return this->destination->to_string() + " " + program::to_string(this->op)
 			+ " " + this->source->to_string();
 	}
-	void InstructionAssignment::bind_all(Scope &scope) {
-		this->source->bind_all(scope);
-		this->destination->bind_all(scope);
+	void InstructionAssignment::bind_all(AggregateScope &agg_scope) {
+		this->source->bind_all(agg_scope);
+		this->destination->bind_all(agg_scope);
 	}
 
 	std::string to_string(ComparisonOperator op){
@@ -264,10 +247,10 @@ namespace L2::program {
 		return result;
 	}
 
-	void InstructionCompareAssignment::bind_all(Scope &scope) {
-		this->destination->bind_all(scope);
-		this->lhs->bind_all(scope);
-		this->rhs->bind_all(scope);
+	void InstructionCompareAssignment::bind_all(AggregateScope &agg_scope) {
+		this->destination->bind_all(agg_scope);
+		this->lhs->bind_all(agg_scope);
+		this->rhs->bind_all(agg_scope);
 	}
 
 	std::string InstructionCompareJump::to_string() const {
@@ -279,122 +262,57 @@ namespace L2::program {
 		return sol;
 	}
 
-	void InstructionCompareJump::bind_all(Scope &scope) {
-		this->label->bind_all(scope);
-		this->lhs->bind_all(scope);
-		this->rhs->bind_all(scope);
+	void InstructionCompareJump::bind_all(AggregateScope &agg_scope) {
+		this->label->bind_all(agg_scope);
+		this->lhs->bind_all(agg_scope);
+		this->rhs->bind_all(agg_scope);
 	}
 
 	std::string InstructionLabel::to_string() const {
 		return this->label_name;
 	}
 
-	void InstructionLabel::bind_all(Scope &scope) {
-		scope.resolve_label(*this);
+	void InstructionLabel::bind_all(AggregateScope &agg_scope) {
+		agg_scope.label_scope.resolve_item(this->label_name, this);
 	}
 
 	std::string InstructionGoto::to_string() const {
 		return "goto " + this->label->to_string();
 	}
 
-	void InstructionGoto::bind_all(Scope &scope) {
-		this->label->bind_all(scope);
+	void InstructionGoto::bind_all(AggregateScope &agg_scope) {
+		this->label->bind_all(agg_scope);
 	}
 
 	std::string InstructionCall::to_string() const {
 		return "call " + this->callee->to_string() + " " + std::to_string(this->num_arguments);
 	}
 
-	void InstructionCall::bind_all(Scope &scope) {
-		this->callee->bind_all(scope);
+	void InstructionCall::bind_all(AggregateScope &agg_scope) {
+		this->callee->bind_all(agg_scope);
 	}
 
 	std::string InstructionLeaq::to_string() const {
 		return this->destination->to_string() + " @ " + this->base->to_string()
 			+ " " + this->base->to_string() + " " + std::to_string(this->scale);
 	}
-	
-	void InstructionLeaq::bind_all(Scope &scope) {
-		this->destination->bind_all(scope);
-		this->base->bind_all(scope);
-		this->offset->bind_all(scope);
-	}
 
-	Scope::Scope(std::optional<Scope *> parent) : parent {parent} {} // default initialize everything else
-
-	VariableRef Scope::get_variable_create(const std::string_view &name) {
-		std::optional<VariableRef> maybe_variable = get_variable_maybe(name);
-		if (maybe_variable) {
-			// the variable already exists, so return it
-			return *maybe_variable;
-		} else {
-			// the variable doens't exist, so make one in this scope
-			auto pair = this->var_dic.insert(std::make_pair(std::string(name), Variable(name)));
-			return VariableRef(&(pair.first->second));
-		}
-	}
-
-	std::optional<VariableRef> Scope::get_variable_maybe(const std::string_view &name) {
-		auto it = this->var_dic.find(name);
-		if (it == this->var_dic.end()) {
-			if (this->parent) {
-				return (*this->parent)->get_variable_maybe(name);
-			} else {
-				return {};
-			}
-		} else {
-			return std::make_optional<VariableRef>(&(it->second));
-		}
-	}
-
-	RegisterRef Scope::get_register_or_fail(const std::string_view &name) {
-		auto it = this->reg_dic.find(name);
-		if (it == this->reg_dic.end()){
-			if (this->parent) {
-				return (*this->parent)->get_register_or_fail(name);
-			} else {
-				std::cerr << "HOLY SHIT THE WORLD IS BURNING NO REGISTER: " << name << " REEEEE\n";
-				exit(-1);
-			}
-		} else {
-			return &it->second;
-		}
-	}
-
-	void Scope::add_pending_label_ref(LabelRef *label_ref) {
-		std::string_view label_name = label_ref->get_label_name();
-		auto instruction_label_it = this->label_dic.find(label_name);
-		if (instruction_label_it == this->label_dic.end()) {
-			// if here then label_ref has not matched yet
-			this->unmatched_labels[std::string(label_name)].push_back(label_ref);
-		} else {
-			// if here then label_ref has been matched
-			label_ref->bind(instruction_label_it->second);
-		}
-	}
-
-	void Scope::resolve_label(InstructionLabel &instruction_label){
-		auto instruction_label_it = this->label_dic.find(instruction_label.label_name);
-		if (instruction_label_it == this->label_dic.end()) {
-			std::cerr << "TWO LABELS OF THE SAME NAME: " << instruction_label.label_name << "\n";
-		}
-
-		auto unmatched_labels_vector_it = this->unmatched_labels.find(instruction_label.label_name);
-		if (unmatched_labels_vector_it != this->unmatched_labels.end()) {
-			for (LabelRef *label_ref : unmatched_labels_vector_it->second) {
-				label_ref->bind(&instruction_label);
-			}
-			this->unmatched_labels.erase(unmatched_labels_vector_it);
-		}
+	void InstructionLeaq::bind_all(AggregateScope &agg_scope) {
+		this->destination->bind_all(agg_scope);
+		this->base->bind_all(agg_scope);
+		this->offset->bind_all(agg_scope);
 	}
 
 	void Function::add_instruction(std::unique_ptr<Instruction> &&inst) {
-		inst->bind_all(this->scope);
+		inst->bind_all(this->agg_scope);
 		this->instructions.push_back(std::move(inst));
 	}
 
-	void Function::bind_all(Scope &program_scope){
-		//TODO
+	void Function::bind_all(AggregateScope &agg_scope) {
+		this->agg_scope.variable_scope.set_parent(agg_scope.variable_scope);
+		this->agg_scope.register_scope.set_parent(agg_scope.register_scope);
+		this->agg_scope.label_scope.set_parent(agg_scope.label_scope);
+		this->agg_scope.function_scope.set_parent(agg_scope.function_scope);
 	}
 
 	std::string Function::to_string() const {
@@ -406,12 +324,13 @@ namespace L2::program {
 		return result;
 	}
 
-	Program::Program(
-		std::unique_ptr<FunctionRef> &&entry_function_ref,
-	) :
+	Program::Program(std::unique_ptr<FunctionRef> &&entry_function_ref) :
 		entry_function_ref {std::move(entry_function_ref)},
-		program_scope {}
-	{}
+		functions {},
+		agg_scope {}
+	{
+		this->agg_scope.function_scope.add_ref(*(this->entry_function_ref));
+	}
 
 	std::string Program::to_string() const {
 		std::string result = "(" + this->entry_function_ref->to_string();
@@ -421,13 +340,34 @@ namespace L2::program {
 		result += "\n)";
 		return result;
 	}
-	
+
 	void Program::add_function(std::unique_ptr<Function> &&func){
-		func->bind_all(this->program_scope);
-		if (function->name == this->entry_function_ref->get_fun_name()) {
-			this->entry_function_ref->bind(function.get());
-			break;
-		}
-		this->functions.push_back(move(func));
+		func->bind_all(this->agg_scope);
+		this->functions.push_back(std::move(func));
+	}
+
+	AggregateScope &Program::get_scope() {
+		return this->agg_scope;
+	}
+
+	std::vector<Register> generate_registers() {
+		std::vector<Register> result;
+		result.emplace_back("rax", true, -1);
+		result.emplace_back("rdi", true, 0);
+		result.emplace_back("rsi", true, 1);
+		result.emplace_back("rdx", true, 2);
+		result.emplace_back("rcx", true, 3);
+		result.emplace_back("r8", true, 4);
+		result.emplace_back("r9", true, 5);
+		result.emplace_back("r10", true, -1);
+		result.emplace_back("r11", true, -1);
+		result.emplace_back("r12", false, -1);
+		result.emplace_back("r13", false, -1);
+		result.emplace_back("r14", false, -1);
+		result.emplace_back("r15", false, -1);
+		result.emplace_back("rbx", false, -1);
+		result.emplace_back("rbp", false, -1);
+		result.emplace_back("rsp", false, -1);
+		return result;
 	}
 }

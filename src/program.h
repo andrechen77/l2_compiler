@@ -8,23 +8,14 @@
 #include <iostream>
 #include <string_view>
 #include <set>
+#include <type_traits>
 
 namespace L2::program {
-	// TODO remove this (or move it to something like simone's architecture.cpp)
-	// enum struct RegisterID {
-	// 	rax,
-	// 	rcx,
-	// 	rdx,
-	// 	rdi,
-	// 	rsi,
-	// 	r8,
-	// 	r9,
-	// 	rsp
-	// };
-
 	struct Variable;
 	struct Register;
+	template<typename Item, typename ItemRef, bool DefineOnUse>
 	class Scope;
+	struct AggregateScope;
 
 	class Expr {
 		public:
@@ -39,7 +30,7 @@ namespace L2::program {
 		virtual std::set<Variable *> get_vars_on_write(bool get_read_vars) const {
 			return {};
 		}
-		virtual void bind_all(Scope &fun_scope){}
+		virtual void bind_all(AggregateScope &agg_scope) {}
 	};
 
 	class RegisterRef : public Expr {
@@ -52,10 +43,12 @@ namespace L2::program {
 		RegisterRef(Register* referent);
 		RegisterRef(const std::string_view &free_name);
 
+		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
 		virtual std::set<Variable *> get_vars_on_read() const override;
 		virtual std::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
+		void bind(Register *referent);
 	};
 
 	struct NumberLiteral : Expr {
@@ -85,7 +78,7 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 		virtual std::set<Variable *> get_vars_on_read() const override;
 		virtual std::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
-
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	struct InstructionLabel;
@@ -93,17 +86,16 @@ namespace L2::program {
 	class LabelRef : public Expr {
 		private:
 		std::string free_name;
-		InstructionLabel *referent;
+		InstructionLabel **referent;
 
 		public:
 
 		LabelRef(const std::string_view &free_name);
-		LabelRef(InstructionLabel *referent);
 
-		void bind(InstructionLabel *referent);
-		std::string_view get_label_name() const;
+		void bind(InstructionLabel **referent);
+		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	/*
@@ -130,12 +122,11 @@ namespace L2::program {
 		VariableRef(Variable *referent);
 
 		void bind(Variable *referent);
-
-		std::string_view get_var_name() const;
+		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
 		virtual std::set<Variable *> get_vars_on_read() const override;
 		virtual std::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	struct Function;
@@ -151,23 +142,16 @@ namespace L2::program {
 		// L2 functions such as by making a superclass of both
 		bool is_std;
 		std::string name;
-		Function *referent;
+		Function **referent;
 
 		public:
 
 		FunctionRef(const std::string_view &name, bool is_std);
-		FunctionRef(Function *referent);
 
-		void bind(Function *referent);
-
-		// TODO why is this here?
-		FunctionRef(const FunctionRef &other) :
-			name {other.name},
-			is_std {other.is_std}
-		{}
-
-		std::string_view get_fun_name() const;
+		void bind(Function **referent);
+		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	struct InstructionReturn;
@@ -195,7 +179,7 @@ namespace L2::program {
 	struct Instruction {
 		virtual std::string to_string() const = 0;
 		virtual void accept(InstructionVisitor &v) = 0;
-		virtual void bind_all(Scope &fun_scope){}
+		virtual void bind_all(AggregateScope &agg_scope) {}
 	};
 
 	struct InstructionReturn : Instruction {
@@ -232,7 +216,7 @@ namespace L2::program {
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	enum struct ComparisonOperator {
@@ -265,7 +249,7 @@ namespace L2::program {
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	struct InstructionCompareJump : Instruction {
@@ -285,7 +269,7 @@ namespace L2::program {
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	struct InstructionLabel : Instruction {
@@ -295,7 +279,7 @@ namespace L2::program {
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	struct InstructionGoto : Instruction {
@@ -305,7 +289,7 @@ namespace L2::program {
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	struct InstructionCall : Instruction {
@@ -319,7 +303,7 @@ namespace L2::program {
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
 	struct InstructionLeaq : Instruction {
@@ -342,69 +326,194 @@ namespace L2::program {
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
-		virtual void bind_all(Scope &fun_scope) override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
-	struct Item {};
-
-	struct Variable : Item {
+	struct Variable {
 		std::string name;
 
 		Variable(const std::string_view &name) : name {name} {}
 	};
 
 	struct Register : Variable {
-		Register(const std::string_view &name) : Variable(name) {}
+		bool is_callee_saved;
+		int argument_order; // the ordinal number of the argument; 0 for first
+		// -1 if not used as an argument
+
+		Register(
+			const std::string_view &name,
+			bool is_callee_saved,
+			int argument_order
+		) :
+			Variable(name),
+			is_callee_saved {is_callee_saved},
+			argument_order {argument_order}
+		{}
 	};
 
-	// TODO create a Scope class
-	// which maps variable names (strings) to Variable objects
-	// which maps label names (strings) to their locations
+
+	// A ScopeComponent represents a namespace of Items that the ItemRefs care
+	// about.
+	// `(name, item)` pairs in this->dict represent Items defined in this scope
+	// under `name`.
+	// `(name, ItemRef *)` in free_referrers represents that that ItemRef has
+	// refers to `name`, but that it is a free name (unbound to anything in this
+	// scope)
+	// An ItemRef must have a
+	// - void ItemRef::bind(Item *referent) method that can be used to bind a free
+	// name to an Item once the item is encountered.
+	// - std::string_view ItemRef::get_ref_name() method that can be used to get
+	// the name that the ItemRef refers to.
+	//
+	// If DefineOnUse is true, Item must have a constructor that takes a name so
+	// that one can be created if it did not already exist.
+	template<typename Item, typename ItemRef, bool DefineOnUse>
 	class Scope {
-		std::map<std::string, InstructionLabel *, std::less<void>> label_dic;
-		std::map<std::string, Variable, std::less<void>> var_dic;
-		std::map<std::string, Register, std::less<void>> reg_dic;
-		std::map<std::string, Function *, std::less<void>> fun_dic;
-		std::map<std::string, std::vector<LabelRef*>, std::less<void>> unmatched_labels;
+		private:
+		// If a Scope has a parent, then it cannot have any
+		// free_refs; they must have been transferred to the parent.
 		std::optional<Scope *> parent;
+		std::map<std::string, Item, std::less<void>> dict;
+		std::map<std::string, std::vector<ItemRef *>, std::less<void>> free_refs;
 
 		public:
 
-		Scope(std::optional<Scope *> parent = {});
+		Scope() : parent {}, dict {}, free_refs {} {}
 
-		VariableRef get_variable_create(const std::string_view &name);
+		// returns whether the ref was immediately bound or was left as free
+		bool add_ref(ItemRef &item_ref) {
+			std::string_view ref_name = item_ref.get_ref_name();
 
-		std::optional<VariableRef> get_variable_maybe(const std::string_view &name);
+			std::optional<Item *> maybe_item_ptr = this->get_item_maybe(ref_name);
+			if (maybe_item_ptr) {
+				// bind the ref to the item
+				item_ref.bind(*maybe_item_ptr);
+				return true;
+			} else {
+				// there is no definition of this name in the current scope
+				this->push_free_ref(item_ref);
+				return false;
+			}
+		}
 
-		RegisterRef get_register_or_fail(const std::string_view &name);
+		// Adds the specified item to this scope under the specified name,
+		// resolving all free refs who were depending on that name. Dies if
+		// there already exists an item under that name.
+		void resolve_item(std::string name, Item item) {
+			auto existing_item_it = this->dict.find(name);
+			if (existing_item_it != this->dict.end()) {
+				std::cerr << "name conflict: " << name << std::endl;
+				exit(-1);
+			}
 
-		void add_pending_label_ref(LabelRef *label_ref);
+			const auto [item_it, _] = this->dict.insert(std::make_pair(
+				name,
+				std::move(item)
+			));
+			auto free_refs_vec_it = this->free_refs.find(name);
+			if (free_refs_vec_it != this->free_refs.end()) {
+				for (ItemRef *item_ref_ptr : free_refs_vec_it->second) {
+					item_ref_ptr->bind(&item_it->second);
+				}
+				this->free_refs.erase(free_refs_vec_it);
+			}
+		}
 
-		void resolve_label(InstructionLabel &instruction_label);
+		// In addition to using free names like normal, clients may also use
+		// this method to define an Item at the same time that it is used.
+		// (kinda like python variable declaration).
+		// The below conditional inclusion trick doesn't work because
+		// gcc-toolset-11 doesn't seem to respect SFINAE, so just allow all
+		// instantiation sto use it and hope for the best.
+		// template<typename T = std::enable_if_t<DefineOnUse>>
+		Item *get_item_or_create(const std::string_view &name) {
+			std::optional<Item *> maybe_item_ptr = get_item_maybe(name);
+			if (maybe_item_ptr) {
+				return *maybe_item_ptr;
+			} else {
+				const auto [item_it, _] = this->dict.insert(std::make_pair(
+					std::string(name),
+					Item(name)
+				));
+				return &item_it->second;
+			}
+		}
 
-		// TODO labels later
+		std::optional<Item *> get_item_maybe(const std::string_view &name) {
+			auto item_it = this->dict.find(name);
+			if (item_it == this->dict.end()) {
+				if (this->parent) {
+					return (*this->parent)->get_item_maybe(name);
+				} else {
+					return {};
+				}
+			} else {
+				return std::make_optional<Item *>(&item_it->second);
+			}
+		}
+
+		// Sets the given Scope as the parent of this Scope, transferring all
+		// current and future free names to the parent. If this scope already
+		// has a parent, dies.
+		void set_parent(Scope &parent) {
+			if (this->parent) {
+				std::cerr << "this scope already has a parent oops\n";
+				exit(-1);
+			}
+
+			this->parent = std::make_optional<Scope *>(&parent);
+
+			for (auto &[name, our_free_refs_vec] : this->free_refs) {
+				auto &parent_free_refs_vec = (*this->parent)->free_refs[name];
+				parent_free_refs_vec.insert(
+					parent_free_refs_vec.end(),
+					our_free_refs_vec.begin(),
+					our_free_refs_vec.end()
+				);
+			}
+			this->free_refs.clear();
+		}
+
+		private:
+
+		// Given an item_ref, exposes it as a ref with a free name. This may
+		// be caught by the parent Scope and resolved, or the parent might
+		// also expose it as a free ref recursively.
+		void push_free_ref(ItemRef &item_ref) {
+			std::string_view ref_name = item_ref.get_ref_name();
+			if (this->parent) {
+				(*this->parent)->add_ref(item_ref);
+			} else {
+				this->free_refs[std::string(ref_name)].push_back(&item_ref);
+			}
+		}
+	};
+
+	struct AggregateScope {
+		Scope<Variable, VariableRef, true> variable_scope;
+		Scope<Register, RegisterRef, false> register_scope;
+		Scope<InstructionLabel *, LabelRef, false> label_scope;
+		Scope<Function *, FunctionRef, false> function_scope;
 	};
 
 	struct Function {
 		std::string name;
 		std::unique_ptr<NumberLiteral> num_arguments;
 		std::vector<std::unique_ptr<Instruction>> instructions;
-		Scope fun_scope;
+		AggregateScope agg_scope;
 
 		Function(
 			const std::string_view &name,
 			std::unique_ptr<NumberLiteral> &&num_arguments
-			Scope *fun_scope
 		) :
 			name {name},
 			num_arguments {std::move(num_arguments)},
 			instructions {},
-			scope {}
+			agg_scope {}
 		{}
 
 		void add_instruction(std::unique_ptr<Instruction> &&inst);
-		void bind_all(Scope &program_scope);
-
+		void bind_all(AggregateScope &agg_scope);
 		std::string to_string() const;
 	};
 
@@ -413,16 +522,16 @@ namespace L2::program {
 
 		std::unique_ptr<FunctionRef> entry_function_ref;
 		std::vector<std::unique_ptr<Function>> functions;
-		Scope program_scope;
+		AggregateScope agg_scope;
 
 		public:
 
-		Program(
-			std::unique_ptr<FunctionRef> &&entry_function_ref,
-		);
+		Program(std::unique_ptr<FunctionRef> &&entry_function_ref);
 
 		std::string to_string() const;
 		void add_function(std::unique_ptr<Function> &&func);
-
+		AggregateScope &get_scope();
 	};
+
+	std::vector<Register> generate_registers();
 }
