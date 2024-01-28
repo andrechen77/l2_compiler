@@ -646,27 +646,28 @@ namespace L2::parser {
 			return n.string_view();
 		}
 
-		ptr<LabelLocation> convert_label_rule(const ParseNode &n) {
+		ptr<LabelRef> make_label_ref(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::LabelRule));
-			return std::make_unique<LabelLocation>(convert_name_rule(n[0]));
+			return std::make_unique<LabelRef>(convert_name_rule(n[0]));
 		}
 
-		ptr<FunctionRef> convert_function_name_rule(const ParseNode &n) {
+		ptr<FunctionRef> make_function_ref(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::FunctionNameRule));
 			return std::make_unique<FunctionRef>(convert_name_rule(n[0]), false);
 		}
 
-		ptr<Variable> convert_variable_rule(const ParseNode &n) {
+		ptr<VariableRef> convert_variable_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::VariableRule));
-			return std::make_unique<Variable>(convert_name_rule(n[0]));
+			return std::make_unique<VariableRef>(convert_name_rule(n[0]));
 		}
 
-		ptr<Register> convert_register_rule(const ParseNode &n) {
+		ptr<RegisterRef> convert_register_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::RegisterRule));
-			return std::make_unique<Register>(n.string_view());
+			return std::make_unique<RegisterRef>(n.string_view());
 		}
 
-		ptr<Value> make_value(const ParseNode &n);
+		// TODO rename to make_expr
+		ptr<Expr> make_value(const ParseNode &n);
 
 		ptr<StackArg> convert_stack_arg_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::StackArgRule));
@@ -686,18 +687,18 @@ namespace L2::parser {
 			return std::make_unique<FunctionRef>(n.string_view(), true);
 		}
 
-		ptr<Value> make_value(const ParseNode &n) {
+		ptr<Expr> make_value(const ParseNode &n) {
 			const std::type_info &rule = *n.rule;
 			if (rule == typeid(rules::RegisterRule)) {
 				return convert_register_rule(n);
 			} else if (rule == typeid(rules::NumberRule)) {
 				return convert_number_rule(n);
 			} else if (rule == typeid(rules::LabelRule)) {
-				return convert_label_rule(n);
+				return make_label_ref(n);
 			} else if (rule == typeid(rules::VariableRule)) {
 				return convert_variable_rule(n);
 			} else if (rule == typeid(rules::FunctionNameRule)) {
-				return convert_function_name_rule(n);
+				return make_function_ref(n);
 			} else if (rule == typeid(rules::StdFunctionNameRule)) {
 				return convert_std_function_name_rule(n);
 			} else if (rule == typeid(rules::MemoryLocationRule)) {
@@ -705,7 +706,7 @@ namespace L2::parser {
 			} else if (rule == typeid(rules::StackArgRule)) {
 				return convert_stack_arg_rule(n);
 			} else {
-				std::cerr << "Cannot make Value from this parse node of type " << n.type << "\n";
+				std::cerr << "Cannot make Expr from this parse node of type " << n.type << "\n";
 				exit(1);
 			}
 		}
@@ -732,7 +733,7 @@ namespace L2::parser {
 			);
 		}
 
-		std::unique_ptr<InstructionAssignment> make_pure_instruction_assignment(const ParseNode &n){
+		std::unique_ptr<InstructionAssignment> make_pure_instruction_assignment(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::InstructionAssignmentRule)
 				|| *n.rule == typeid(rules::InstructionMemoryReadRule)
 				|| *n.rule == typeid(rules::InstructionMemoryWriteRule)
@@ -744,7 +745,7 @@ namespace L2::parser {
 			);
 		}
 
-		std::unique_ptr<InstructionAssignment> make_plus_instruction_assignment(const ParseNode &n){
+		std::unique_ptr<InstructionAssignment> make_plus_instruction_assignment(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::InstructionPlusReadMemoryRule)
 				|| *n.rule == typeid(rules::InstructionPlusWriteMemoryRule));
 			return std::make_unique<InstructionAssignment>(
@@ -754,7 +755,7 @@ namespace L2::parser {
 			);
 		}
 
-		std::unique_ptr<InstructionAssignment> make_minus_instruction_assignment(const ParseNode &n){
+		std::unique_ptr<InstructionAssignment> make_minus_instruction_assignment(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::InstructionMinusReadMemoryRule)
 				|| *n.rule == typeid(rules::InstructionMinusWriteMemoryRule));
 			return std::make_unique<InstructionAssignment>(
@@ -785,18 +786,18 @@ namespace L2::parser {
 				convert_comparison_operator_rule(n[1]),
 				make_value(n[0]),
 				make_value(n[2]),
-				convert_label_rule(n[3])
+				make_label_ref(n[3])
 			);
 		}
 
 		ptr<InstructionLabel> convert_instruction_label_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::InstructionLabelRule));
-			return std::make_unique<InstructionLabel>(convert_label_rule(n[0]));
+			return std::make_unique<InstructionLabel>(convert_name_rule(n[0][0]));
 		}
 
 		ptr<InstructionGoto> convert_instruction_goto_label_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::InstructionGotoLabelRule));
-			return std::make_unique<InstructionGoto>(convert_label_rule(n[0]));
+			return std::make_unique<InstructionGoto>(make_label_ref(n[0]));
 		}
 
 		std::unique_ptr<InstructionCall> make_instruction_call(const ParseNode &n) {
@@ -817,7 +818,7 @@ namespace L2::parser {
 			);
 		}
 
-		std::unique_ptr<InstructionAssignment> convert_instruction_decrement_rule(const ParseNode &n){
+		std::unique_ptr<InstructionAssignment> convert_instruction_decrement_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::InstructionDecrementRule));
 			return std::make_unique<InstructionAssignment>(
 				AssignOperator::subtract,
@@ -887,39 +888,47 @@ namespace L2::parser {
 			}
 		}
 
-		std::vector<std::unique_ptr<Instruction>> convert_instructions_rule(const ParseNode &n) {
-			assert(*n.rule == typeid(rules::InstructionsRule));
-			std::vector<std::unique_ptr<Instruction>> result;
-			for (const auto &child : n.children) {
-				result.push_back(make_instruction(*child));
-			}
-			return result;
-		}
-
 		ptr<Function> make_function(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::FunctionRule));
-			return std::make_unique<Function>(
-				convert_function_name_rule(n[0]),
-				convert_number_rule(n[1]),
-				convert_instructions_rule(n[2])
+			std::unique_ptr<Function> function = std::make_unique<Function>(
+				convert_name_rule(n[0][0]),
+				convert_number_rule(n[1])
 			);
+
+			const ParseNode &instructions_rule = n[2];
+			assert(*instructions_rule.rule == typeid(rules::InstructionsRule));
+			for (const auto &child : instructions_rule.children) {
+				function->add_instruction(make_instruction(*child));
+			}
+			return function;
 		}
 
-		std::vector<ptr<Function>> convert_functions_rule(const ParseNode &n) {
-			assert(*n.rule == typeid(rules::FunctionsRule));
-			std::vector<ptr<Function>> result;
-			for (const auto &child : n.children) {
-				result.push_back(make_function(*child));
-			}
-			return result;
-		}
+		// std::vector<ptr<Function>> convert_functions_rule(const ParseNode &n, ) {
+		// 	assert(*n.rule == typeid(rules::FunctionsRule));
+		// 	std::vector<ptr<Function>> result;
+		// 	for (const auto &child : n.children) {
+		// 		result.push_back(make_function(*child));
+		// 	}
+		// 	return result;
+		// }
 
 		std::unique_ptr<Program> convert_program_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::ProgramRule));
-			return std::make_unique<Program>(
-				convert_function_name_rule(n[0]),
-				convert_functions_rule(n[1])
+			std::unique_ptr<Program> p = std::make_unique<Program>(
+				make_function_ref(n[0]),
 			);
+			// add all registers to program scope
+
+
+			for (const std::unique_ptr<ParseNode> &functions : n[1].children){
+				// pseudo function declartion which the name not hte instructions
+				
+				
+				// 
+				
+				p->add_function(make_pussy_function(*function));
+			}
+
 		}
 	}
 

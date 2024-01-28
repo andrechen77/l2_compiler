@@ -82,11 +82,11 @@ int main(
 		// Parse an L2 function.
 		std::unique_ptr<L2::program::Function> f = L2::parser::parse_function_file(argv[optind]);
 		// std::cout << f->to_string();
-		std::map<L2::program::Instruction *, L2::program::analyze::InstructionAnalysisResult> liveness_results
+		/* std::map<L2::program::Instruction *, L2::program::analyze::InstructionAnalysisResult> liveness_results
 			= L2::program::analyze::analyze_instructions(*f);
 
 		// print in sets
-		L2::program::analyze::printDaLiveness(*f, liveness_results);
+		L2::program::analyze::printDaLiveness(*f, liveness_results); */
 		return 0;
 	} else if (interference_only){
 		// Parse an L2 function.
@@ -94,6 +94,7 @@ int main(
 	} else {
 		// Parse the L2 program.
 		p = L2::parser::parse_file(argv[optind], parse_tree_output);
+		std::cout << p->to_string() << std::endl;
 	}
 
 	/*

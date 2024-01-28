@@ -1,3 +1,4 @@
+(@main	
 	(@main
 		// comment here
 		0
@@ -24,3 +25,4 @@
 		return
 		// comment here
 	)
+)
