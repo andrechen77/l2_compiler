@@ -464,14 +464,23 @@ namespace L2::program {
 			this->parent = std::make_optional<Scope *>(&parent);
 
 			for (auto &[name, our_free_refs_vec] : this->free_refs) {
-				auto &parent_free_refs_vec = (*this->parent)->free_refs[name];
-				parent_free_refs_vec.insert(
-					parent_free_refs_vec.end(),
-					our_free_refs_vec.begin(),
-					our_free_refs_vec.end()
-				);
+				for (ItemRef *our_free_ref : our_free_refs_vec) {
+					// TODO optimization here is possible; instead of using the
+					// public API of the parent we can just query the dictionary
+					// directly
+					(*this->parent)->add_ref(*our_free_ref);
+				}
 			}
 			this->free_refs.clear();
+		}
+
+		// returns whether free refs exist in this scope for the given name
+		std::vector<ItemRef *> get_free_refs() const {
+			std::vector<ItemRef *> result;
+			for (auto &[name, free_refs_vec] : this->free_refs) {
+				result.insert(result.end(), free_refs_vec.begin(), free_refs_vec.end());
+			}
+			return result;
 		}
 
 		private:
@@ -489,11 +498,16 @@ namespace L2::program {
 		}
 	};
 
+	using VariableScope = Scope<Variable, VariableRef, true>;
+	using RegisterScope = Scope<Register, RegisterRef, false>;
+	using LabelScope = Scope<InstructionLabel *, LabelRef, false>;
+	using FunctionScope = Scope<Function *, FunctionRef, false>;
+
 	struct AggregateScope {
-		Scope<Variable, VariableRef, true> variable_scope;
-		Scope<Register, RegisterRef, false> register_scope;
-		Scope<InstructionLabel *, LabelRef, false> label_scope;
-		Scope<Function *, FunctionRef, false> function_scope;
+		VariableScope variable_scope;
+		RegisterScope register_scope;
+		LabelScope label_scope;
+		FunctionScope function_scope;
 	};
 
 	struct Function {

@@ -941,9 +941,27 @@ namespace L2::parser {
 				}
 			}
 
-			return node_processor::convert_program_rule((*root)[0]);
+			auto p = node_processor::convert_program_rule((*root)[0]);
+			const AggregateScope &ps = p->get_scope();
+			if (auto free_var_refs = ps.variable_scope.get_free_refs(); !free_var_refs.empty()) {
+				std::cerr << "Error: unbound variable name " << free_var_refs[0]->get_ref_name() << "\n";
+				exit(1);
+			}
+			if (auto free_reg_refs = ps.register_scope.get_free_refs(); !free_reg_refs.empty()) {
+				std::cerr << "Error: unbound register name " << free_reg_refs[0]->get_ref_name() << "\n";
+				exit(1);
+			}
+			if (auto free_label_refs = ps.label_scope.get_free_refs(); !free_label_refs.empty()) {
+				std::cerr << "Error: unbound variable " << free_label_refs[0]->get_ref_name() << "\n";
+				exit(1);
+			}
+			if (auto free_fun_refs = ps.function_scope.get_free_refs(); !free_fun_refs.empty()) {
+				std::cerr << "Error: unbound variable " << free_fun_refs[0]->get_ref_name() << "\n";
+				exit(1);
+			}
+			return p;
 		}
-		return {};
+		exit(1);
 	}
 	std::unique_ptr<Function> parse_function_file(char *fileName) {
 		pegtl::file_input<> fileInput(fileName);

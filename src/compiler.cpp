@@ -94,7 +94,6 @@ int main(
 	} else {
 		// Parse the L2 program.
 		p = L2::parser::parse_file(argv[optind], parse_tree_output);
-		std::cout << p->to_string() << std::endl;
 	}
 
 	/*

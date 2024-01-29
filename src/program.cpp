@@ -188,7 +188,9 @@ namespace L2::program {
 	}
 
 	void FunctionRef::bind_all(AggregateScope &agg_scope) {
-		agg_scope.function_scope.add_ref(*this);
+		if (!this->is_std) {
+			agg_scope.function_scope.add_ref(*this);
+		}
 	}
 
 	std::string InstructionReturn::to_string() const {
@@ -313,10 +315,11 @@ namespace L2::program {
 		this->agg_scope.register_scope.set_parent(agg_scope.register_scope);
 		this->agg_scope.label_scope.set_parent(agg_scope.label_scope);
 		this->agg_scope.function_scope.set_parent(agg_scope.function_scope);
+		agg_scope.function_scope.resolve_item(this->name, this);
 	}
 
 	std::string Function::to_string() const {
-		std::string result = "(" + this->name + " " + this->num_arguments->to_string();
+		std::string result = "(@" + this->name + " " + this->num_arguments->to_string();
 		for (const auto &inst : this->instructions) {
 			result += "\n" + inst->to_string();
 		}

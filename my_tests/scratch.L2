@@ -1,4 +1,4 @@
-(@main	
+(@main
 	(@main
 		// comment here
 		0
@@ -16,7 +16,7 @@
 		cjump rax < 0 :label
 		:label
 		goto :label
-		call @otherfunc 0
+		call @main 0
 		call print 1
 		%var++
 		%var--
