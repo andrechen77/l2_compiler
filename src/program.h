@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils.h"
 #include <memory>
 #include <vector>
 #include <map>
@@ -23,11 +24,11 @@ namespace L2::program {
 		virtual std::string to_string() const = 0;
 
 		// which sub-values are read when this Expr is read
-		virtual std::set<Variable *> get_vars_on_read() const {
+		virtual utils::set<Variable *> get_vars_on_read() const {
 			return {};
 		}
 		// which sub-values are read/written when this Expr is written
-		virtual std::set<Variable *> get_vars_on_write(bool get_read_vars) const {
+		virtual utils::set<Variable *> get_vars_on_write(bool get_read_vars) const {
 			return {};
 		}
 		virtual void bind_all(AggregateScope &agg_scope) {}
@@ -45,10 +46,11 @@ namespace L2::program {
 
 		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
-		virtual std::set<Variable *> get_vars_on_read() const override;
-		virtual std::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
+		virtual utils::set<Variable *> get_vars_on_read() const override;
+		virtual utils::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
 		void bind(Register *referent);
+		Register *get_referent() const { return this->referent; }
 	};
 
 	struct NumberLiteral : Expr {
@@ -76,8 +78,8 @@ namespace L2::program {
 		{}
 
 		virtual std::string to_string() const override;
-		virtual std::set<Variable *> get_vars_on_read() const override;
-		virtual std::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
+		virtual utils::set<Variable *> get_vars_on_read() const override;
+		virtual utils::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
@@ -96,17 +98,9 @@ namespace L2::program {
 		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
+		InstructionLabel *get_referent() const { return *this->referent; }
 	};
 
-	/*
-	FUTURE: Instead of these containing the name of the variable itself (i hate strings),
-	we rename these to VariableRefs and have them refer to a Variable contained
-	in the innermost Scope. A Scope is an object that is owned by something like
-	a Function which just describes all the names (such as variable names and
-	label names) within that scope. This happens during parsing.
-	Then we can have instruction analysis work with references to those Variable
-	objects instead of with strings (I hate strings)
-	*/
 	class VariableRef : public Expr {
 		private:
 		// the null-ness of this->referent determines whether this is a free
@@ -124,9 +118,10 @@ namespace L2::program {
 		void bind(Variable *referent);
 		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
-		virtual std::set<Variable *> get_vars_on_read() const override;
-		virtual std::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
+		virtual utils::set<Variable *> get_vars_on_read() const override;
+		virtual utils::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
+		Variable *get_referent() const { return this->referent; }
 	};
 
 	struct L2Function;
@@ -145,6 +140,7 @@ namespace L2::program {
 		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
+		L2Function *get_referent() const { return *this->referent; }
 	};
 
 	class ExternalFunctionRef : public Expr {
@@ -345,16 +341,19 @@ namespace L2::program {
 
 	struct Register : Variable {
 		bool is_callee_saved;
+		bool is_return_value;
 		int argument_order; // the ordinal number of the argument; 0 for first
 		// -1 if not used as an argument
 
 		Register(
 			const std::string_view &name,
 			bool is_callee_saved,
+			bool is_return_value,
 			int argument_order
 		) :
 			Variable(name),
 			is_callee_saved {is_callee_saved},
+			is_return_value {is_return_value},
 			argument_order {argument_order}
 		{}
 	};
@@ -564,6 +563,8 @@ namespace L2::program {
 		ExternalFunctionScope external_function_scope;
 
 		void set_parent(AggregateScope &parent);
+
+		void ensure_no_frees() const;
 	};
 
 	class L2Function : public Function {
@@ -584,7 +585,7 @@ namespace L2::program {
 		private:
 
 		std::unique_ptr<L2FunctionRef> entry_function_ref;
-		std::vector<std::unique_ptr<L2Function>> functions;
+		std::vector<std::unique_ptr<L2Function>> l2_functions;
 		std::vector<std::unique_ptr<ExternalFunction>> external_functions;
 		AggregateScope agg_scope;
 
@@ -596,9 +597,12 @@ namespace L2::program {
 		void add_l2_function(std::unique_ptr<L2Function> &&func);
 		void add_external_function(std::unique_ptr<ExternalFunction> &&func);
 		AggregateScope &get_scope();
+		L2Function *get_l2_function(int index);
 	};
 
 	std::vector<Register> generate_registers();
 
 	std::vector<std::unique_ptr<ExternalFunction>> generate_std_functions();
+
+	void add_predefined_registers_and_std(Program &program);
 }

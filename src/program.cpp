@@ -26,14 +26,14 @@ namespace L2::program {
 		this->referent = referent;
 	}
 
-	std::set<Variable *> RegisterRef::get_vars_on_read() const {
+	utils::set<Variable *> RegisterRef::get_vars_on_read() const {
 		// TODO if we are referring to rsp, then return nothing
 		if (false) {
 			return {};
 		}
 		return {this->referent};
 	}
-	std::set<Variable *> RegisterRef::get_vars_on_write(bool get_read_vars) const {
+	utils::set<Variable *> RegisterRef::get_vars_on_write(bool get_read_vars) const {
 		// TODO if we are referring to rsp, then return nothing
 		if (false) {
 			return {};
@@ -65,11 +65,11 @@ namespace L2::program {
 		return "mem " + this->base->to_string() + " " + this->offset->to_string();
 	}
 
-	std::set<Variable *> MemoryLocation::get_vars_on_read() const {
+	utils::set<Variable *> MemoryLocation::get_vars_on_read() const {
 		return this->base->get_vars_on_read();
 	}
 
-	std::set<Variable *> MemoryLocation::get_vars_on_write(bool get_read_vars) const {
+	utils::set<Variable *> MemoryLocation::get_vars_on_write(bool get_read_vars) const {
 		// the base is read even if this MemoryLocation is being written
 		if (get_read_vars) {
 			return this->base->get_vars_on_read();
@@ -141,10 +141,10 @@ namespace L2::program {
 		return "%" + std::string(this->get_ref_name());
 	}
 
-	std::set<Variable *> VariableRef::get_vars_on_read() const {
+	utils::set<Variable *> VariableRef::get_vars_on_read() const {
 		return {this->referent};
 	}
-	std::set<Variable *> VariableRef::get_vars_on_write(bool get_read_vars) const {
+	utils::set<Variable *> VariableRef::get_vars_on_write(bool get_read_vars) const {
 		if (get_read_vars) {
 			return {};
 		} else {
@@ -322,6 +322,29 @@ namespace L2::program {
 		this->external_function_scope.set_parent(parent.external_function_scope);
 	}
 
+	void AggregateScope::ensure_no_frees() const {
+		if (auto free_var_refs = this->variable_scope.get_free_refs(); !free_var_refs.empty()) {
+			std::cerr << "Error: unbound variable name " << free_var_refs[0]->get_ref_name() << "\n";
+			exit(1);
+		}
+		if (auto free_reg_refs = this->register_scope.get_free_refs(); !free_reg_refs.empty()) {
+			std::cerr << "Error: unbound register name " << free_reg_refs[0]->get_ref_name() << "\n";
+			exit(1);
+		}
+		if (auto free_label_refs = this->label_scope.get_free_refs(); !free_label_refs.empty()) {
+			std::cerr << "Error: unbound label " << free_label_refs[0]->get_ref_name() << "\n";
+			exit(1);
+		}
+		if (auto free_fun_refs = this->l2_function_scope.get_free_refs(); !free_fun_refs.empty()) {
+			std::cerr << "Error: unbound l2 function " << free_fun_refs[0]->get_ref_name() << "\n";
+			exit(1);
+		}
+		if (auto free_ext_fun_refs = this->external_function_scope.get_free_refs(); !free_ext_fun_refs.empty()) {
+			std::cerr << "Error: unbound std function " << free_ext_fun_refs[0]->get_ref_name() << "\n";
+			exit(1);
+		}
+	}
+
 	Function::Function(const std::string_view &name, int64_t num_arguments) :
 		name {name}, num_arguments {num_arguments}
 	{}
@@ -372,7 +395,8 @@ namespace L2::program {
 
 	Program::Program(std::unique_ptr<L2FunctionRef> &&entry_function_ref) :
 		entry_function_ref {std::move(entry_function_ref)},
-		functions {},
+		l2_functions {},
+		external_functions {},
 		agg_scope {}
 	{
 		this->agg_scope.l2_function_scope.add_ref(*(this->entry_function_ref));
@@ -380,7 +404,7 @@ namespace L2::program {
 
 	std::string Program::to_string() const {
 		std::string result = "(" + this->entry_function_ref->to_string();
-		for (const auto &function : this->functions) {
+		for (const auto &function : this->l2_functions) {
 			result += "\n" + function->to_string();
 		}
 		result += "\n)";
@@ -389,7 +413,7 @@ namespace L2::program {
 
 	void Program::add_l2_function(std::unique_ptr<L2Function> &&func){
 		func->bind_all(this->agg_scope);
-		this->functions.push_back(std::move(func));
+		this->l2_functions.push_back(std::move(func));
 	}
 
 	void Program::add_external_function(std::unique_ptr<ExternalFunction> &&func) {
@@ -401,24 +425,28 @@ namespace L2::program {
 		return this->agg_scope;
 	}
 
+	L2Function *Program::get_l2_function(int index) {
+		return this->l2_functions.at(index).get();
+	}
+
 	std::vector<Register> generate_registers() {
 		std::vector<Register> result;
-		result.emplace_back("rax", true, -1);
-		result.emplace_back("rdi", true, 0);
-		result.emplace_back("rsi", true, 1);
-		result.emplace_back("rdx", true, 2);
-		result.emplace_back("rcx", true, 3);
-		result.emplace_back("r8", true, 4);
-		result.emplace_back("r9", true, 5);
-		result.emplace_back("r10", true, -1);
-		result.emplace_back("r11", true, -1);
-		result.emplace_back("r12", false, -1);
-		result.emplace_back("r13", false, -1);
-		result.emplace_back("r14", false, -1);
-		result.emplace_back("r15", false, -1);
-		result.emplace_back("rbx", false, -1);
-		result.emplace_back("rbp", false, -1);
-		result.emplace_back("rsp", false, -1);
+		result.emplace_back("rax", true, true, -1);
+		result.emplace_back("rdi", true, false, 0);
+		result.emplace_back("rsi", true, false, 1);
+		result.emplace_back("rdx", true, false, 2);
+		result.emplace_back("rcx", true, false, 3);
+		result.emplace_back("r8", true, false, 4);
+		result.emplace_back("r9", true, false, 5);
+		result.emplace_back("r10", true, false, -1);
+		result.emplace_back("r11", true, false, -1);
+		result.emplace_back("r12", false, false, -1);
+		result.emplace_back("r13", false, false, -1);
+		result.emplace_back("r14", false, false, -1);
+		result.emplace_back("r15", false, false, -1);
+		result.emplace_back("rbx", false, false, -1);
+		result.emplace_back("rbp", false, false, -1);
+		result.emplace_back("rsp", false, false, -1);
 		return result;
 	}
 
@@ -431,4 +459,15 @@ namespace L2::program {
 		result.push_back(std::make_unique<ExternalFunction>("tuple-error", -1, true));
 		return result;
 	}
+
+	void add_predefined_registers_and_std(Program &program) {
+		AggregateScope &program_scope = program.get_scope();
+		for (const Register &reg : generate_registers()) {
+			program_scope.register_scope.resolve_item(reg.name, std::move(reg));
+		}
+		for (std::unique_ptr<ExternalFunction> &fn : generate_std_functions()) {
+			program.add_external_function(std::move(fn));
+		}
+	}
+
 }

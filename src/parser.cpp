@@ -213,7 +213,7 @@ namespace L2::parser {
 
 		struct InexplicableURule :
 			sor<
-				InexplicableXRule,
+				InexplicableWRule,
 				FunctionNameRule
 			>
 		{};
@@ -907,13 +907,7 @@ namespace L2::parser {
 			std::unique_ptr<Program> program = std::make_unique<Program>(
 				make_l2_function_ref(n[0])
 			);
-			AggregateScope &program_scope = program->get_scope();
-			for (const Register &reg : generate_registers()) {
-				program_scope.register_scope.resolve_item(reg.name, std::move(reg));
-			}
-			for (std::unique_ptr<ExternalFunction> &fn : generate_std_functions()) {
-				program->add_external_function(std::move(fn));
-			}
+			add_predefined_registers_and_std(*program);
 
 			const ParseNode &functions_rule = n[1];
 			assert(*functions_rule.rule == typeid(rules::FunctionsRule));
@@ -945,37 +939,23 @@ namespace L2::parser {
 			}
 
 			auto p = node_processor::convert_program_rule((*root)[0]);
-			const AggregateScope &ps = p->get_scope();
-			if (auto free_var_refs = ps.variable_scope.get_free_refs(); !free_var_refs.empty()) {
-				std::cerr << "Error: unbound variable name " << free_var_refs[0]->get_ref_name() << "\n";
-				exit(1);
-			}
-			if (auto free_reg_refs = ps.register_scope.get_free_refs(); !free_reg_refs.empty()) {
-				std::cerr << "Error: unbound register name " << free_reg_refs[0]->get_ref_name() << "\n";
-				exit(1);
-			}
-			if (auto free_label_refs = ps.label_scope.get_free_refs(); !free_label_refs.empty()) {
-				std::cerr << "Error: unbound label " << free_label_refs[0]->get_ref_name() << "\n";
-				exit(1);
-			}
-			if (auto free_fun_refs = ps.l2_function_scope.get_free_refs(); !free_fun_refs.empty()) {
-				std::cerr << "Error: unbound l2 function " << free_fun_refs[0]->get_ref_name() << "\n";
-				exit(1);
-			}
-			if (auto free_ext_fun_refs = ps.external_function_scope.get_free_refs(); !free_ext_fun_refs.empty()) {
-				std::cerr << "Error: unbound std function " << free_ext_fun_refs[0]->get_ref_name() << "\n";
-				exit(1);
-			}
-			std::cerr << p->to_string() << "\n";
+			p->get_scope().ensure_no_frees();
 			return p;
 		}
 		exit(1);
 	}
-	std::unique_ptr<L2Function> parse_function_file(char *fileName) {
+	std::unique_ptr<Program> parse_function_file(char *fileName) {
 		pegtl::file_input<> fileInput(fileName);
 		auto root = pegtl::parse_tree::parse<pegtl::must<rules::FunctionRule>, ParseNode, rules::Selector>(fileInput);
 		if (root) {
-			return node_processor::make_l2_function((*root)[0]);
+			auto function = node_processor::make_l2_function((*root)[0]);
+			auto program = std::make_unique<Program>(
+				std::make_unique<L2FunctionRef>(function->get_name())
+			);
+			add_predefined_registers_and_std(*program);
+			program->add_l2_function(std::move(function));
+			program->get_scope().ensure_no_frees();
+			return program;
 		}
 		return {};
 	}
