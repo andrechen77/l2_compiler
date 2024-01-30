@@ -380,6 +380,17 @@ namespace L2::program {
 
 		Scope() : parent {}, dict {}, free_refs {} {}
 
+		std::vector<const Item *> get_all_items() const {
+			std::vector<const Item *> result;
+			if (this->parent) {
+				result = std::move((*this->parent)->get_all_items());
+			}
+			for (const auto &[name, item] : this->dict) {
+				result.push_back(&item);
+			}
+			return result;
+		}
+
 		// returns whether the ref was immediately bound or was left as free
 		bool add_ref(ItemRef &item_ref) {
 			std::string_view ref_name = item_ref.get_ref_name();
