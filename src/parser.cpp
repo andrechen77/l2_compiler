@@ -954,7 +954,7 @@ namespace L2::parser {
 			);
 			add_predefined_registers_and_std(*program);
 			program->add_l2_function(std::move(function));
-			program->get_scope().ensure_no_frees();
+			program->get_scope().fake_bind_frees();
 			return program;
 		}
 		return {};

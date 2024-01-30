@@ -2,6 +2,7 @@
 #include <string>
 #include <iostream>
 #include <assert.h>
+#include <algorithm>
 
 namespace L2::program::analyze {
 	// TODO if only I could get this to work
@@ -54,14 +55,16 @@ namespace L2::program::analyze {
 					assert(this->argument_registers[order] == nullptr);
 					this->argument_registers[order] = reg;
 				}
-				if (reg->is_callee_saved) {
-					this->callee_saved_registers.insert(reg);
-				} else {
-					this->caller_saved_registers.insert(reg);
-				}
-				if (reg->is_return_value) {
-					assert(this->return_value_register == nullptr);
-					this->return_value_register = reg;
+				if (!reg->ignores_liveness) {
+					if (reg->is_callee_saved) {
+						this->callee_saved_registers.insert(reg);
+					} else {
+						this->caller_saved_registers.insert(reg);
+					}
+					if (reg->is_return_value) {
+						assert(this->return_value_register == nullptr);
+						this->return_value_register = reg;
+					}
 				}
 			}
 			// TODO add assert that there are no nullptrs in this->argument_registers
@@ -74,10 +77,6 @@ namespace L2::program::analyze {
 		virtual void visit(InstructionReturn &inst) override {
 			InstructionAnalysisResult &entry = accum[&inst];
 			entry.gen_set += this->callee_saved_registers;
-			// entry.gen_set.insert(
-			// 	this->callee_saved_registers.begin(),
-			// 	this->callee_saved_registers.end()
-			// );
 			entry.gen_set.insert(this->return_value_register);
 			index += 1;
 		}
@@ -124,12 +123,15 @@ namespace L2::program::analyze {
 			entry.gen_set += inst.callee->get_vars_on_read();
 			entry.gen_set.insert(
 				this->argument_registers.begin(),
-				this->argument_registers.begin() + inst.num_arguments
+				this->argument_registers.begin() + std::min(
+					static_cast<std::size_t>(inst.num_arguments),
+					this->argument_registers.size()
+				)
 			);
 			entry.kill_set += caller_saved_registers;
 			if (
-				Function *fn = dynamic_cast<Function *>(inst.callee.get()); // TODO best way to avoid dynamic casting?
-				fn && !fn->get_never_returns()
+				ExternalFunctionRef *fn = dynamic_cast<ExternalFunctionRef *>(inst.callee.get()); // TODO best way to avoid dynamic casting?
+				!fn || !fn->get_referent()->get_never_returns()
 			) {
 				entry.successors.push_back(this->get_next_instruction());
 			}
@@ -150,19 +152,6 @@ namespace L2::program::analyze {
 			return this->target.instructions[this->index + 1].get();
 		}
 	};
-
-	std::string resized(std::string s, std::size_t length = 30) {
-		s.resize(length, ' ');
-		return s;
-	}
-
-	// std::string andre(const utils::set<std::string> &bob) {
-	// 	std::string result =  "{";
-	// 	for (const std::string &str : bob) {
-	// 		result += str + ", ";
-	// 	}
-	// 	return result + "}";
-	// }
 
 	std::map<Instruction *, InstructionAnalysisResult> analyze_instructions(const L2Function &function) {
 		auto num_instructions = function.instructions.size();
@@ -185,15 +174,6 @@ namespace L2::program::analyze {
 
 			sets_changed = false;
 			for (int i = num_instructions - 1; i >= 0; --i) {
-				// for (const auto &inst : function.instructions) {
-				// 	InstructionAnalysisResult &entry = resol[inst.get()];
-				// 	std::cerr << resized(inst->to_string(), 50) << " ";
-				// 	std::cerr << resized(kevin(entry.in_set), 50) << " " << resized(kevin(entry.out_set), 50) << "\n";
-				// }
-				// std::string pog;
-				// std::cin >> pog;
-				// std::cerr << "continuing\n";
-
 				InstructionAnalysisResult &entry = resol[function.instructions[i].get()];
 
 				// out[i] = UNION (s in successors(i)) {in[s]}
@@ -245,7 +225,7 @@ namespace L2::program::analyze {
 			const InstructionAnalysisResult &entry = liveness_results[instruction.get()];
 			std::cout << "(";
 			for (const Variable *element : entry.in_set) {
-        		std::cout << element->name << " ";
+        		std::cout << element->to_string() << " ";
     		}
 			std::cout << ")\n";
 		}
@@ -256,7 +236,7 @@ namespace L2::program::analyze {
 			const InstructionAnalysisResult &entry = liveness_results[instruction.get()];
 			std::cout << "(";
 			for (const Variable *element : entry.out_set) {
-        		std::cout << element->name << " ";
+        		std::cout << element->to_string() << " ";
     		}
 			std::cout << ")\n";
 		}

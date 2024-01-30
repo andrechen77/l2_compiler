@@ -27,15 +27,13 @@ namespace L2::program {
 	}
 
 	utils::set<Variable *> RegisterRef::get_vars_on_read() const {
-		// TODO if we are referring to rsp, then return nothing
-		if (false) {
+		if (this->referent->ignores_liveness) {
 			return {};
 		}
 		return {this->referent};
 	}
 	utils::set<Variable *> RegisterRef::get_vars_on_write(bool get_read_vars) const {
-		// TODO if we are referring to rsp, then return nothing
-		if (false) {
+		if (this->referent->ignores_liveness) {
 			return {};
 		}
 		if (get_read_vars) {
@@ -280,7 +278,7 @@ namespace L2::program {
 	}
 
 	std::string InstructionLabel::to_string() const {
-		return this->label_name;
+		return ":" + this->label_name;
 	}
 
 	void InstructionLabel::bind_all(AggregateScope &agg_scope) {
@@ -343,6 +341,23 @@ namespace L2::program {
 			std::cerr << "Error: unbound std function " << free_ext_fun_refs[0]->get_ref_name() << "\n";
 			exit(1);
 		}
+	}
+
+	void AggregateScope::fake_bind_frees() {
+		// intentional memory leak
+		this->variable_scope.fake_bind_frees(new Variable("FAKE_VARIABLE"));
+		this->register_scope.fake_bind_frees(new Register("FAKE_REGISTER", false, false, false, -1));
+		this->label_scope.fake_bind_frees(new InstructionLabel *(new InstructionLabel("FAKE_LABEL")));
+		this->l2_function_scope.fake_bind_frees(new L2Function *(new L2Function("FAKE_L2_FUNCTION", 0)));
+		this->external_function_scope.fake_bind_frees(new ExternalFunction *(new ExternalFunction("FAKE_EXTERNAL_FUNCTION", 0, false)));
+	}
+
+	std::string Variable::to_string() const {
+		return "%" + this->name;
+	}
+
+	std::string Register::to_string() const {
+		return this->name;
 	}
 
 	Function::Function(const std::string_view &name, int64_t num_arguments) :
@@ -431,22 +446,22 @@ namespace L2::program {
 
 	std::vector<Register> generate_registers() {
 		std::vector<Register> result;
-		result.emplace_back("rax", true, true, -1);
-		result.emplace_back("rdi", true, false, 0);
-		result.emplace_back("rsi", true, false, 1);
-		result.emplace_back("rdx", true, false, 2);
-		result.emplace_back("rcx", true, false, 3);
-		result.emplace_back("r8", true, false, 4);
-		result.emplace_back("r9", true, false, 5);
-		result.emplace_back("r10", true, false, -1);
-		result.emplace_back("r11", true, false, -1);
-		result.emplace_back("r12", false, false, -1);
-		result.emplace_back("r13", false, false, -1);
-		result.emplace_back("r14", false, false, -1);
-		result.emplace_back("r15", false, false, -1);
-		result.emplace_back("rbx", false, false, -1);
-		result.emplace_back("rbp", false, false, -1);
-		result.emplace_back("rsp", false, false, -1);
+		result.emplace_back("rax", false, true, false, -1);
+		result.emplace_back("rdi", false, false, false, 0);
+		result.emplace_back("rsi", false, false, false, 1);
+		result.emplace_back("rdx", false, false, false, 2);
+		result.emplace_back("rcx", false, false, false, 3);
+		result.emplace_back("r8", false, false, false, 4);
+		result.emplace_back("r9", false, false, false, 5);
+		result.emplace_back("r10", false, false, false, -1);
+		result.emplace_back("r11", false, false, false, -1);
+		result.emplace_back("r12", true, false, false, -1);
+		result.emplace_back("r13", true, false, false, -1);
+		result.emplace_back("r14", true, false, false, -1);
+		result.emplace_back("r15", true, false, false, -1);
+		result.emplace_back("rbx", true, false, false, -1);
+		result.emplace_back("rbp", true, false, false, -1);
+		result.emplace_back("rsp", true, false, true, -1);
 		return result;
 	}
 

@@ -156,6 +156,7 @@ namespace L2::program {
 		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
+		ExternalFunction *get_referent() const { return *this->referent; }
 	};
 
 	struct InstructionReturn;
@@ -303,7 +304,12 @@ namespace L2::program {
 		InstructionCall(std::unique_ptr<Expr> &&callee, int64_t num_arguments) :
 			callee {std::move(callee)},
 			num_arguments {num_arguments}
-		{}
+		{
+			if (this->num_arguments < 0) {
+				std::cerr << "Error: negative number of call arguments.\n";
+				exit(-1);
+			}
+		}
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -337,11 +343,13 @@ namespace L2::program {
 		std::string name;
 
 		Variable(const std::string_view &name) : name {name} {}
+		virtual std::string to_string() const;
 	};
 
 	struct Register : Variable {
 		bool is_callee_saved;
 		bool is_return_value;
+		bool ignores_liveness; // only true for rsp
 		int argument_order; // the ordinal number of the argument; 0 for first
 		// -1 if not used as an argument
 
@@ -349,13 +357,17 @@ namespace L2::program {
 			const std::string_view &name,
 			bool is_callee_saved,
 			bool is_return_value,
+			bool ignores_liveness,
 			int argument_order
 		) :
 			Variable(name),
 			is_callee_saved {is_callee_saved},
 			is_return_value {is_return_value},
+			ignores_liveness {ignores_liveness},
 			argument_order {argument_order}
 		{}
+
+		virtual std::string to_string() const override;
 	};
 
 	class Function {
@@ -527,6 +539,18 @@ namespace L2::program {
 			return result;
 		}
 
+		// binds all free names to the given item
+		void fake_bind_frees(Item *item_ptr) {
+			for (auto &[name, free_refs_vec] : this->free_refs) {
+				for (ItemRef *item_ref_ptr : free_refs_vec) {
+					// TODO we should be allowed to print this
+					// std::cerr << "fake-bound free name: " << item_ref_ptr->get_ref_name() << "\n";
+					item_ref_ptr->bind(item_ptr);
+				}
+			}
+			this->free_refs.clear();
+		}
+
 		private:
 
 		// Given an item_ref, exposes it as a ref with a free name. This may
@@ -564,7 +588,8 @@ namespace L2::program {
 
 		void set_parent(AggregateScope &parent);
 
-		void ensure_no_frees() const;
+		void ensure_no_frees() const; // fails if there are free names
+		void fake_bind_frees(); // adds fake bindings to free names; leaks memory
 	};
 
 	class L2Function : public Function {
