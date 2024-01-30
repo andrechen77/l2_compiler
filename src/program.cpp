@@ -1,4 +1,5 @@
 #include "program.h"
+#include "utils.h"
 #include <map>
 #include <utility>
 #include <functional>
@@ -151,46 +152,54 @@ namespace L2::program {
 		}
 	}
 
-	FunctionRef::FunctionRef(const std::string_view &name, bool is_std) :
-		name {name},
-		is_std {is_std},
+	L2FunctionRef::L2FunctionRef(const std::string_view &free_name) :
+		free_name {free_name},
 		referent {nullptr}
 	{}
 
-	void FunctionRef::bind(Function **referent) {
-		if (this->is_std) {
-			std::cerr << "cannot bind a FunctionRef to an std function.\n";
-			exit(-1);
-		}
-
+	void L2FunctionRef::bind(L2Function **referent) {
 		this->referent = referent;
 	}
 
-	std::string_view FunctionRef::get_ref_name() const {
-		if (this->is_std) {
-			return this->name;
-		}
-
+	std::string_view L2FunctionRef::get_ref_name() const {
 		if (this->referent) {
-			return (*this->referent)->name;
+			return (*this->referent)->get_name();
 		} else {
-			return this->name;
+			return this->free_name;
 		}
 	}
 
-	std::string FunctionRef::to_string() const {
-		std::string result;
-		if (!this->is_std) {
-			result += "@";
-		}
-		result += this->get_ref_name();
-		return result;
+	std::string L2FunctionRef::to_string() const {
+		return "@" + std::string(this->get_ref_name());
 	}
 
-	void FunctionRef::bind_all(AggregateScope &agg_scope) {
-		if (!this->is_std) {
-			agg_scope.function_scope.add_ref(*this);
+	void L2FunctionRef::bind_all(AggregateScope &agg_scope) {
+		agg_scope.l2_function_scope.add_ref(*this);
+	}
+
+	ExternalFunctionRef::ExternalFunctionRef(const std::string_view &free_name) :
+		free_name {free_name},
+		referent {nullptr}
+	{}
+
+	void ExternalFunctionRef::bind(ExternalFunction **referent) {
+		this->referent = referent;
+	}
+
+	std::string_view ExternalFunctionRef::get_ref_name() const {
+		if (this->referent) {
+			return (*this->referent)->get_name();
+		} else {
+			return this->free_name;
 		}
+	}
+
+	std::string ExternalFunctionRef::to_string() const {
+		return std::string(this->get_ref_name());
+	}
+
+	void ExternalFunctionRef::bind_all(AggregateScope &agg_scope) {
+		agg_scope.external_function_scope.add_ref(*this);
 	}
 
 	std::string InstructionReturn::to_string() const {
@@ -305,21 +314,53 @@ namespace L2::program {
 		this->offset->bind_all(agg_scope);
 	}
 
-	void Function::add_instruction(std::unique_ptr<Instruction> &&inst) {
+	void AggregateScope::set_parent(AggregateScope &parent) {
+		this->variable_scope.set_parent(parent.variable_scope);
+		this->register_scope.set_parent(parent.register_scope);
+		this->label_scope.set_parent(parent.label_scope);
+		this->l2_function_scope.set_parent(parent.l2_function_scope);
+		this->external_function_scope.set_parent(parent.external_function_scope);
+	}
+
+	Function::Function(const std::string_view &name, int64_t num_arguments) :
+		name {name}, num_arguments {num_arguments}
+	{}
+
+	std::string Function::to_string() const { return this->name; }
+
+	ExternalFunction::ExternalFunction(const std::string_view &name, int64_t num_arguments, bool never_returns) :
+		Function(name, num_arguments),
+		never_returns {never_returns}
+	{}
+
+	bool ExternalFunction::get_never_returns() const {
+		return this->never_returns;
+	}
+
+	L2Function::L2Function(
+		const std::string_view &name,
+		int64_t num_arguments
+	) :
+		Function(name, num_arguments),
+		instructions {},
+		agg_scope {}
+	{}
+
+	void L2Function::add_instruction(std::unique_ptr<Instruction> &&inst) {
 		inst->bind_all(this->agg_scope);
 		this->instructions.push_back(std::move(inst));
 	}
 
-	void Function::bind_all(AggregateScope &agg_scope) {
-		this->agg_scope.variable_scope.set_parent(agg_scope.variable_scope);
-		this->agg_scope.register_scope.set_parent(agg_scope.register_scope);
-		this->agg_scope.label_scope.set_parent(agg_scope.label_scope);
-		this->agg_scope.function_scope.set_parent(agg_scope.function_scope);
-		agg_scope.function_scope.resolve_item(this->name, this);
+	void L2Function::bind_all(AggregateScope &agg_scope) {
+		this->agg_scope.set_parent(agg_scope);
+		agg_scope.l2_function_scope.resolve_item(this->get_name(), this);
 	}
 
-	std::string Function::to_string() const {
-		std::string result = "(@" + this->name + " " + this->num_arguments->to_string();
+	std::string L2Function::to_string() const {
+		std::string result = "(@"
+			+ this->Function::to_string()
+			+ " "
+			+ std::to_string(this->get_num_arguments());
 		for (const auto &inst : this->instructions) {
 			result += "\n" + inst->to_string();
 		}
@@ -327,12 +368,14 @@ namespace L2::program {
 		return result;
 	}
 
-	Program::Program(std::unique_ptr<FunctionRef> &&entry_function_ref) :
+	bool L2Function::get_never_returns() const { return false; }
+
+	Program::Program(std::unique_ptr<L2FunctionRef> &&entry_function_ref) :
 		entry_function_ref {std::move(entry_function_ref)},
 		functions {},
 		agg_scope {}
 	{
-		this->agg_scope.function_scope.add_ref(*(this->entry_function_ref));
+		this->agg_scope.l2_function_scope.add_ref(*(this->entry_function_ref));
 	}
 
 	std::string Program::to_string() const {
@@ -344,9 +387,14 @@ namespace L2::program {
 		return result;
 	}
 
-	void Program::add_function(std::unique_ptr<Function> &&func){
+	void Program::add_l2_function(std::unique_ptr<L2Function> &&func){
 		func->bind_all(this->agg_scope);
 		this->functions.push_back(std::move(func));
+	}
+
+	void Program::add_external_function(std::unique_ptr<ExternalFunction> &&func) {
+		this->agg_scope.external_function_scope.resolve_item(func->get_name(), func.get());
+		this->external_functions.push_back(std::move(func));
 	}
 
 	AggregateScope &Program::get_scope() {
@@ -371,6 +419,16 @@ namespace L2::program {
 		result.emplace_back("rbx", false, -1);
 		result.emplace_back("rbp", false, -1);
 		result.emplace_back("rsp", false, -1);
+		return result;
+	}
+
+	std::vector<std::unique_ptr<ExternalFunction>> generate_std_functions() {
+		std::vector<std::unique_ptr<ExternalFunction>> result;
+		result.push_back(std::make_unique<ExternalFunction>("print", 1, false));
+		result.push_back(std::make_unique<ExternalFunction>("input", 0, false));
+		result.push_back(std::make_unique<ExternalFunction>("allocate", 2, false));
+		result.push_back(std::make_unique<ExternalFunction>("tensor-error", 3, true));
+		result.push_back(std::make_unique<ExternalFunction>("tuple-error", -1, true));
 		return result;
 	}
 }

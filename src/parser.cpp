@@ -651,9 +651,9 @@ namespace L2::parser {
 			return std::make_unique<LabelRef>(convert_name_rule(n[0]));
 		}
 
-		ptr<FunctionRef> make_function_ref(const ParseNode &n) {
+		ptr<L2FunctionRef> make_l2_function_ref(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::FunctionNameRule));
-			return std::make_unique<FunctionRef>(convert_name_rule(n[0]), false);
+			return std::make_unique<L2FunctionRef>(convert_name_rule(n[0]));
 		}
 
 		ptr<VariableRef> convert_variable_rule(const ParseNode &n) {
@@ -681,9 +681,9 @@ namespace L2::parser {
 			);
 		}
 
-		ptr<FunctionRef> convert_std_function_name_rule(const ParseNode &n) {
+		ptr<ExternalFunctionRef> convert_std_function_name_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::StdFunctionNameRule));
-			return std::make_unique<FunctionRef>(n.string_view(), true);
+			return std::make_unique<ExternalFunctionRef>(n.string_view());
 		}
 
 		ptr<Expr> make_expr(const ParseNode &n) {
@@ -697,7 +697,7 @@ namespace L2::parser {
 			} else if (rule == typeid(rules::VariableRule)) {
 				return convert_variable_rule(n);
 			} else if (rule == typeid(rules::FunctionNameRule)) {
-				return make_function_ref(n);
+				return make_l2_function_ref(n);
 			} else if (rule == typeid(rules::StdFunctionNameRule)) {
 				return convert_std_function_name_rule(n);
 			} else if (rule == typeid(rules::MemoryLocationRule)) {
@@ -804,7 +804,7 @@ namespace L2::parser {
 				|| *n.rule == typeid(rules::InstructionStdCallRule));
 			return std::make_unique<InstructionCall>(
 				make_expr(n[0]),
-				utils::string_view_to_int<int64_t>(n[1].string_view())
+				convert_number_rule(n[1])->value
 			);
 		}
 
@@ -832,7 +832,7 @@ namespace L2::parser {
 				make_expr(n[0]),
 				make_expr(n[1]),
 				make_expr(n[2]),
-				utils::string_view_to_int<int64_t>(n[3].string_view())
+				convert_number_rule(n[3])->value
 			);
 		}
 
@@ -887,11 +887,11 @@ namespace L2::parser {
 			}
 		}
 
-		ptr<Function> make_function(const ParseNode &n) {
+		ptr<L2Function> make_l2_function(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::FunctionRule));
-			std::unique_ptr<Function> function = std::make_unique<Function>(
+			std::unique_ptr<L2Function> function = std::make_unique<L2Function>(
 				convert_name_rule(n[0][0]),
-				convert_number_rule(n[1])
+				convert_number_rule(n[1])->value
 			);
 
 			const ParseNode &instructions_rule = n[2];
@@ -905,17 +905,20 @@ namespace L2::parser {
 		std::unique_ptr<Program> convert_program_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::ProgramRule));
 			std::unique_ptr<Program> program = std::make_unique<Program>(
-				make_function_ref(n[0])
+				make_l2_function_ref(n[0])
 			);
 			AggregateScope &program_scope = program->get_scope();
 			for (const Register &reg : generate_registers()) {
 				program_scope.register_scope.resolve_item(reg.name, std::move(reg));
 			}
+			for (std::unique_ptr<ExternalFunction> &fn : generate_std_functions()) {
+				program->add_external_function(std::move(fn));
+			}
 
 			const ParseNode &functions_rule = n[1];
 			assert(*functions_rule.rule == typeid(rules::FunctionsRule));
 			for (const auto &function : functions_rule.children) {
-				program->add_function(make_function(*function));
+				program->add_l2_function(make_l2_function(*function));
 			}
 			return program;
 		}
@@ -952,22 +955,27 @@ namespace L2::parser {
 				exit(1);
 			}
 			if (auto free_label_refs = ps.label_scope.get_free_refs(); !free_label_refs.empty()) {
-				std::cerr << "Error: unbound variable " << free_label_refs[0]->get_ref_name() << "\n";
+				std::cerr << "Error: unbound label " << free_label_refs[0]->get_ref_name() << "\n";
 				exit(1);
 			}
-			if (auto free_fun_refs = ps.function_scope.get_free_refs(); !free_fun_refs.empty()) {
-				std::cerr << "Error: unbound variable " << free_fun_refs[0]->get_ref_name() << "\n";
+			if (auto free_fun_refs = ps.l2_function_scope.get_free_refs(); !free_fun_refs.empty()) {
+				std::cerr << "Error: unbound l2 function " << free_fun_refs[0]->get_ref_name() << "\n";
 				exit(1);
 			}
+			if (auto free_ext_fun_refs = ps.external_function_scope.get_free_refs(); !free_ext_fun_refs.empty()) {
+				std::cerr << "Error: unbound std function " << free_ext_fun_refs[0]->get_ref_name() << "\n";
+				exit(1);
+			}
+			std::cerr << p->to_string() << "\n";
 			return p;
 		}
 		exit(1);
 	}
-	std::unique_ptr<Function> parse_function_file(char *fileName) {
+	std::unique_ptr<L2Function> parse_function_file(char *fileName) {
 		pegtl::file_input<> fileInput(fileName);
 		auto root = pegtl::parse_tree::parse<pegtl::must<rules::FunctionRule>, ParseNode, rules::Selector>(fileInput);
 		if (root) {
-			return node_processor::make_function((*root)[0]);
+			return node_processor::make_l2_function((*root)[0]);
 		}
 		return {};
 	}

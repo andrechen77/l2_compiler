@@ -129,26 +129,34 @@ namespace L2::program {
 		virtual void bind_all(AggregateScope &agg_scope) override;
 	};
 
-	struct Function;
+	struct L2Function;
+	struct ExternalFunction;
 
-	class FunctionRef : public Expr {
+	class L2FunctionRef : public Expr {
 		private:
-
-		// is_std determines whether this refers to a standard library function
-		// or an L2 function. if the former, then this->name will be permanently
-		// held as the name of the std function; otherwise this FunctionRef
-		// should be bound to an L2 function
-		// TODO make it so that we can refer to std functions similarly to
-		// L2 functions such as by making a superclass of both
-		bool is_std;
-		std::string name;
-		Function **referent;
+		std::string_view free_name;
+		L2Function **referent;
 
 		public:
 
-		FunctionRef(const std::string_view &name, bool is_std);
+		L2FunctionRef(const std::string_view &free_name);
 
-		void bind(Function **referent);
+		void bind(L2Function **referent);
+		std::string_view get_ref_name() const;
+		virtual std::string to_string() const override;
+		virtual void bind_all(AggregateScope &agg_scope) override;
+	};
+
+	class ExternalFunctionRef : public Expr {
+		private:
+		std::string_view free_name;
+		ExternalFunction **referent;
+
+		public:
+
+		ExternalFunctionRef(const std::string_view &free_name);
+
+		void bind(ExternalFunction **referent);
 		std::string_view get_ref_name() const;
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
@@ -351,6 +359,32 @@ namespace L2::program {
 		{}
 	};
 
+	class Function {
+		private:
+
+		std::string name;
+		int64_t num_arguments; // -1 for unknown (this is okay for now because there is only one special case)
+
+		public:
+
+		Function(const std::string_view &name, int64_t num_arguments);
+
+		const std::string &get_name() const { return this->name; }
+		const int64_t get_num_arguments() const { return this->num_arguments; }
+		virtual bool get_never_returns() const = 0;
+		virtual std::string to_string() const;
+	};
+
+	// so far, only used for std functions
+	class ExternalFunction : public Function {
+		private:
+		bool never_returns;
+
+		public:
+
+		ExternalFunction(const std::string_view &name, int64_t num_arguments, bool never_returns);
+		virtual bool get_never_returns() const override;
+	};
 
 	// A ScopeComponent represents a namespace of Items that the ItemRefs care
 	// about.
@@ -509,54 +543,62 @@ namespace L2::program {
 		}
 	};
 
+	// TODO: because we have raw pointers to some of these items, it's very
+	// important that they never move around or else we get memory errors.
+	// We're risking a lot by letting this happen; ideally they would be hidden
+	// behind another layer of indirection; that is to say Item = ptr<Register>
+	// It's fine the way it is for InstructionLabels, L2Functions, and ExternalFunctions
+	// because those are stored behind unique_ptrs so they never move; this only
+	// applies to the Variables and Registers
 	using VariableScope = Scope<Variable, VariableRef, true>;
 	using RegisterScope = Scope<Register, RegisterRef, false>;
 	using LabelScope = Scope<InstructionLabel *, LabelRef, false>;
-	using FunctionScope = Scope<Function *, FunctionRef, false>;
+	using L2FunctionScope = Scope<L2Function *, L2FunctionRef, false>;
+	using ExternalFunctionScope = Scope<ExternalFunction *, ExternalFunctionRef, false>;
 
 	struct AggregateScope {
 		VariableScope variable_scope;
 		RegisterScope register_scope;
 		LabelScope label_scope;
-		FunctionScope function_scope;
+		L2FunctionScope l2_function_scope;
+		ExternalFunctionScope external_function_scope;
+
+		void set_parent(AggregateScope &parent);
 	};
 
-	struct Function {
-		std::string name;
-		std::unique_ptr<NumberLiteral> num_arguments;
+	class L2Function : public Function {
+		public: // TODO make actual specifiers
+
 		std::vector<std::unique_ptr<Instruction>> instructions;
 		AggregateScope agg_scope;
 
-		Function(
-			const std::string_view &name,
-			std::unique_ptr<NumberLiteral> &&num_arguments
-		) :
-			name {name},
-			num_arguments {std::move(num_arguments)},
-			instructions {},
-			agg_scope {}
-		{}
+		L2Function(const std::string_view &name, int64_t num_arguments);
 
 		void add_instruction(std::unique_ptr<Instruction> &&inst);
 		void bind_all(AggregateScope &agg_scope);
-		std::string to_string() const;
+		virtual std::string to_string() const override;
+		bool get_never_returns() const override;
 	};
 
 	class Program {
 		private:
 
-		std::unique_ptr<FunctionRef> entry_function_ref;
-		std::vector<std::unique_ptr<Function>> functions;
+		std::unique_ptr<L2FunctionRef> entry_function_ref;
+		std::vector<std::unique_ptr<L2Function>> functions;
+		std::vector<std::unique_ptr<ExternalFunction>> external_functions;
 		AggregateScope agg_scope;
 
 		public:
 
-		Program(std::unique_ptr<FunctionRef> &&entry_function_ref);
+		Program(std::unique_ptr<L2FunctionRef> &&entry_function_ref);
 
 		std::string to_string() const;
-		void add_function(std::unique_ptr<Function> &&func);
+		void add_l2_function(std::unique_ptr<L2Function> &&func);
+		void add_external_function(std::unique_ptr<ExternalFunction> &&func);
 		AggregateScope &get_scope();
 	};
 
 	std::vector<Register> generate_registers();
+
+	std::vector<std::unique_ptr<ExternalFunction>> generate_std_functions();
 }

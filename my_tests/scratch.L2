@@ -7,19 +7,19 @@
 		rax <- mem %var 0
 		mem %var 0 <- 0
 		rcx += rdx
-		%var <- stack-arg 8
+		%vasdfr <- stack-arg 8
 		%var <<= rcx
-		%var <<= 0
+		%vasdfr <<= 0
 		mem %var 0 += 0
 		rax += mem %var 0
-		rax <- %var < rax
+		rax <- %vssdfar < rax
 		cjump rax < 0 :label
 		:label
 		goto :label
 		call @main 0
 		call print 1
 		%var++
-		%var--
+		%vaagasfdr--
 		%var @ %var %var 1
 		// comment here
 		return
