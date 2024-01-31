@@ -28,7 +28,7 @@ namespace L2::program::analyze {
 
 		const L2Function &target; // the function being analyzed
 		int index; // the index of the current instruction being analyzed
-		std::map<Instruction *, InstructionAnalysisResult> accum;
+		InstructionsAnalysisResult accum;
 
 		utils::set<const Register *> caller_saved_registers;
 		std::vector<const Register *> argument_registers;
@@ -153,7 +153,7 @@ namespace L2::program::analyze {
 		}
 	};
 
-	std::map<Instruction *, InstructionAnalysisResult> analyze_instructions(const L2Function &function) {
+	InstructionsAnalysisResult analyze_instructions(const L2Function &function) {
 		auto num_instructions = function.instructions.size();
 		InstructionPreAnalyzer pre_analyzer(function);
 
@@ -161,7 +161,7 @@ namespace L2::program::analyze {
 			instruction->accept(pre_analyzer);
 		}
 		// "resol" is a compromise between the authors' preferred accumulator variables "result" and "sol"
-		std::map<Instruction *, InstructionAnalysisResult> resol = pre_analyzer.get_accumulator();
+		InstructionsAnalysisResult resol = pre_analyzer.get_accumulator();
 
 		// Each instruction starts with only its gen set as its in set.
 		// This initially satisfies the in set's constraints.
@@ -219,7 +219,7 @@ namespace L2::program::analyze {
 		return resol;
 	}
 
-	void print_liveness(const L2Function &function, std::map<Instruction *, InstructionAnalysisResult> &liveness_results){
+	void print_liveness(const L2Function &function, InstructionsAnalysisResult &liveness_results){
 		std::cout << "(\n(in\n";
 		for (const std::unique_ptr<Instruction> &instruction : function.instructions) {
 			const InstructionAnalysisResult &entry = liveness_results[instruction.get()];

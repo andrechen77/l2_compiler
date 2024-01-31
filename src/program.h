@@ -625,6 +625,9 @@ namespace L2::program {
 		L2Function *get_l2_function(int index);
 	};
 
+
+	// TODO we'd probably want something like a register table object that
+	// allows us to look stuff up easier but whatever
 	std::vector<Register> generate_registers();
 
 	std::vector<std::unique_ptr<ExternalFunction>> generate_std_functions();

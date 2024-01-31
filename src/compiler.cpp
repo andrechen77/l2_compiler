@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "liveness.h"
+#include "interference_graph.h"
 #include <string>
 #include <vector>
 #include <utility>
@@ -80,17 +81,29 @@ int main(
 		p = L2::parser::parse_spill_file(argv[optind]);
 	} else if (liveness_only) {
 		// Parse an L2 function.
-		std::unique_ptr<L2::program::Program> program = L2::parser::parse_function_file(argv[optind]);
-		L2::program::L2Function *f = program->get_l2_function(0);
-		std::map<L2::program::Instruction *, L2::program::analyze::InstructionAnalysisResult> liveness_results
+		p = L2::parser::parse_function_file(argv[optind]);
+
+		// Analyze results
+		L2::program::L2Function *f = p->get_l2_function(0);
+		L2::program::analyze::InstructionsAnalysisResult liveness_results
 			= L2::program::analyze::analyze_instructions(*f);
 
-		// print in sets
+		// print the results
 		L2::program::analyze::print_liveness(*f, liveness_results);
 		return 0;
 	} else if (interference_only){
 		// Parse an L2 function.
-		// p = L2::parser::parse_function_file(argv[optind]);
+		p = L2::parser::parse_function_file(argv[optind]);
+		L2::program::L2Function *f = p->get_l2_function(0);
+		L2::program::analyze::InstructionsAnalysisResult liveness_results
+			= L2::program::analyze::analyze_instructions(*f);
+
+		// Analyze results
+		L2::program::analyze::ColoringGraph<const L2::program::Variable *> graph = generate_interference_graph(f, liveness_results);
+
+		// Print the results
+		std::cout << graph.to_string() << std::endl;
+		return 0;
 	} else {
 		// Parse the L2 program.
 		p = L2::parser::parse_file(argv[optind], parse_tree_output);
