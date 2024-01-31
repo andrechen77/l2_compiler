@@ -66,7 +66,7 @@ namespace L2::program::analyze {
 	) {
 		// TODO this will probably be more than necessary until we delete
 		// spilled variables from the scope
-		std::vector<VariableGraph::Node> total_vars = l2_function.agg_scope.variable_scope.get_all_items();
+		std::vector<VariableGraph::Node> total_vars = static_cast<const L2Function &>(l2_function).agg_scope.variable_scope.get_all_items();
 		total_vars.insert(total_vars.end(), register_color_table.begin(), register_color_table.end());
 		utils::set<const Register *> non_rsp_registers(register_color_table.begin(), register_color_table.end());
 

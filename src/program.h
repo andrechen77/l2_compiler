@@ -85,13 +85,13 @@ namespace L2::program {
 
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
-
 	};
 
 	struct StackArg : Expr {
 		std::unique_ptr<NumberLiteral> stack_num;
 
 		StackArg(std::unique_ptr<NumberLiteral> &&stack_num) : stack_num {std::move(stack_num)} {}
+		// StackArg(const StackArg &other) : stack_num {std::make_unique<NumberLiteral>(*other.stack_num)} {}
 
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
@@ -105,6 +105,10 @@ namespace L2::program {
 		MemoryLocation(std::unique_ptr<Expr> &&base, std::unique_ptr<NumberLiteral> &&offset) :
 			base {std::move(base)}, offset {std::move(offset)}
 		{}
+		// MemoryLocation(const MemoryLocation &other) :
+		// 	base {std::make_unique<Expr>(*other.base)},
+		// 	offset {std::make_unique<NumberLiteral>(*other.offset)}
+		// {}
 
 		virtual std::string to_string() const override;
 		virtual utils::set<Variable *> get_vars_on_read() const override;
@@ -173,7 +177,7 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
 		L2Function *get_referent() const { return *this->referent; }
-		virtual void accept(ExprVisitor &v) override {};
+		virtual void accept(ExprVisitor &v) override { v.visit(*this); };
 	};
 
 	class ExternalFunctionRef : public Expr {
@@ -190,7 +194,7 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
 		ExternalFunction *get_referent() const { return *this->referent; }
-		virtual void accept(ExprVisitor &v) override {};
+		virtual void accept(ExprVisitor &v) override { v.visit(*this); };
 	};
 
 	struct InstructionReturn;
@@ -252,6 +256,11 @@ namespace L2::program {
 		) :
 			op { op }, source { std::move(source) }, destination { std::move(destination )}
 		{}
+		// InstructionAssignment(const InstructionAssignment &other) :
+		// 	source {std::make_unique<Expr>(*other.source)},
+		// 	op {other.op},
+		// 	destination {std::make_unique<Expr>(*other.destination)}
+		// {}
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -285,6 +294,12 @@ namespace L2::program {
 			lhs {std::move(lhs)},
 			rhs {std::move(rhs)}
 		{}
+		// InstructionCompareAssignment(const InstructionCompareAssignment &other) :
+		// 	destination {std::make_unique<Expr>(*other.destination)},
+		// 	op {other.op},
+		// 	lhs {std::make_unique<Expr>(*other.lhs)},
+		// 	rhs {std::make_unique<Expr>(*other.rhs)}
+		// {}
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -305,6 +320,12 @@ namespace L2::program {
 		):
 			op {op}, lhs{std::move(lhs)}, rhs{std::move(rhs)}, label{std::move(label)}
 		{}
+		// InstructionCompareJump(const InstructionCompareJump &other) :
+		// 	op {other.op},
+		// 	lhs {std::make_unique<Expr>(*other.lhs)},
+		// 	rhs {std::make_unique<Expr>(*other.rhs)},
+		// 	label {std::make_unique<LabelRef>(*other.label)}
+		// {}
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -325,6 +346,9 @@ namespace L2::program {
 		std::unique_ptr<LabelRef> label;
 
 		InstructionGoto(std::unique_ptr<LabelRef> &&label) : label {std::move(label)} {}
+		// InstructionGoto(const InstructionGoto &other) :
+		// 	label {std::make_unique<LabelRef>(*other.label)}
+		// {}
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -344,6 +368,10 @@ namespace L2::program {
 				exit(-1);
 			}
 		}
+		// InstructionCall(const InstructionCall &other) :
+		// 	callee {std::make_unique<Expr>(*other.callee)},
+		// 	num_arguments {other.num_arguments}
+		// {}
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -367,6 +395,12 @@ namespace L2::program {
 			offset {std::move(offset)},
 			scale {scale}
 		{}
+		// InstructionLeaq(const InstructionLeaq &other) :
+		// 	destination {std::make_unique<Expr>(*other.destination)},
+		// 	base {std::make_unique<Expr>(*other.base)},
+		// 	offset {std::make_unique<Expr>(*other.offset)},
+		// 	scale {other.scale}
+		// {}
 
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -375,9 +409,19 @@ namespace L2::program {
 
 	struct Variable {
 		std::string name;
+		bool spillable;
 
-		Variable(const std::string_view &name) : name {name} {}
+		Variable(const std::string_view &name) :
+			name {name},
+			spillable {true}
+		{}
+		Variable(const std::string &name, bool spillable) :
+			name{name},
+			spillable{spillable}
+		{}
+
 		virtual std::string to_string() const;
+		void update_spillable(bool spill);
 	};
 
 	struct Register : Variable {
@@ -458,13 +502,25 @@ namespace L2::program {
 		public:
 
 		Scope() : parent {}, dict {}, free_refs {} {}
+		Scope(const Scope &other) = delete;
 
 		std::vector<const Item *> get_all_items() const {
 			std::vector<const Item *> result;
 			if (this->parent) {
-				result = std::move((*this->parent)->get_all_items());
+				result = std::move(static_cast<const Scope *>(*this->parent)->get_all_items());
 			}
 			for (const auto &[name, item] : this->dict) {
+				result.push_back(&item);
+			}
+			return result;
+		}
+
+		std::vector<Item *> get_all_items() {
+			std::vector<Item *> result;
+			if (this->parent) {
+				result = std::move((*this->parent)->get_all_items());
+			}
+			for (auto &[name, item] : this->dict) {
 				result.push_back(&item);
 			}
 			return result;
@@ -573,17 +629,26 @@ namespace L2::program {
 			return result;
 		}
 
-		// binds all free names to the given item
-		void fake_bind_frees(Item *item_ptr) {
+		// returns whether free refs exist in this scope for the given name
+		std::vector<std::string> get_free_names() const {
+			std::vector<std::string> result;
 			for (auto &[name, free_refs_vec] : this->free_refs) {
-				for (ItemRef *item_ref_ptr : free_refs_vec) {
-					// TODO we should be allowed to print this
-					// std::cerr << "fake-bound free name: " << item_ref_ptr->get_ref_name() << "\n";
-					item_ref_ptr->bind(item_ptr);
-				}
+				result.push_back(name);
 			}
-			this->free_refs.clear();
+			return result;
 		}
+
+		// // binds all free names to the given item
+		// void fake_bind_frees(Item *item_ptr) {
+		// 	for (auto &[name, free_refs_vec] : this->free_refs) {
+		// 		for (ItemRef *item_ref_ptr : free_refs_vec) {
+		// 			// TODO we should be allowed to print this
+		// 			// std::cerr << "fake-bound free name: " << item_ref_ptr->get_ref_name() << "\n";
+		// 			item_ref_ptr->bind(item_ptr);
+		// 		}
+		// 	}
+		// 	this->free_refs.clear();
+		// }
 
 		private:
 
@@ -633,6 +698,14 @@ namespace L2::program {
 		AggregateScope agg_scope;
 
 		L2Function(const std::string_view &name, int64_t num_arguments);
+		// L2Function(const L2Function &other) :
+		// 	instructions {},
+		// 	agg_scope {}
+		// {
+		// 	for (const std::unique_ptr<Instruction> &inst : other.instructions) {
+		// TODO how in the world is this supposed to work
+		// 	}
+		// }
 
 		void add_instruction(std::unique_ptr<Instruction> &&inst);
 		void insert_instruction(int index, std::unique_ptr<Instruction> &&inst);
@@ -658,6 +731,8 @@ namespace L2::program {
 		void add_external_function(std::unique_ptr<ExternalFunction> &&func);
 		AggregateScope &get_scope();
 		L2Function *get_l2_function(int index);
+		const std::vector<std::unique_ptr<L2Function>> &get_l2_functions() const { return this->l2_functions; }
+		const L2FunctionRef &get_entry_function_ref() const { return *this->entry_function_ref; }
 	};
 
 	struct SpillProgram {

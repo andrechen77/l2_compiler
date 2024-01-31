@@ -3,6 +3,7 @@
 #include "interference_graph.h"
 #include "register_allocator.h"
 #include "spiller.h"
+#include "code_gen.h"
 #include <string>
 #include <vector>
 #include <utility>
@@ -86,6 +87,7 @@ int main(
 		L2::program::Variable* var = spillprogram->var;
 		L2::program::spiller::spill(*f, var, prefix);
 		std::cout << L2::program::spiller::printDaSpiller(*f, 1) << std::endl;
+		return 0;
 	} else if (liveness_only) {
 		// Parse an L2 function.
 		p = L2::parser::parse_function_file(argv[optind]);
@@ -118,39 +120,46 @@ int main(
 	} else {
 		// Parse the L2 program.
 		p = L2::parser::parse_file(argv[optind], parse_tree_output);
-		L2::program::analyze::allocate_and_spill(*p->get_l2_function(0));
+		auto mp = L2::program::analyze::allocate_and_spill_with_backup(*p->get_l2_function(0));
+		std::cout << p->to_string();
+		for (const auto [key, value] : mp) {
+			std::cout << key->to_string() << ": " << value->to_string() << "\n";
+		}
 	}
 
-	/*
-	 * Special cases.
-	 */
-	if (spill_only) {
+	// /*
+	//  * Special cases.
+	//  */
+	// if (spill_only) {
 
-		/*
-		 * Spill.
-		 */
+	// 	/*
+	// 	 * Spill.
+	// 	 */
 
-		/*
-		 * Dump the L2 code.
-		 */
-		//TODO
+	// 	/*
+	// 	 * Dump the L2 code.
+	// 	 */
+	// 	//TODO
 
-		return 0;
-	}
+	// 	return 0;
+	// }
 
-	/*
-	 * Interference graph test.
-	 */
-	if (interference_only) {
-		//TODO
-		return 0;
-	}
+	// /*
+	//  * Interference graph test.
+	//  */
+	// if (interference_only) {
+	// 	//TODO
+	// 	return 0;
+	// }
 
-	/*
-	 * Generate the target code.
-	 */
+	// /*
+	//  * Generate the target code.
+	//  */
+
 	if (enable_code_generator) {
-		//TODO
+		// std::cerr << p->to_string();
+		L2::code_gen::generate_code(*p);
+		// std::cerr << p->to_string();
 	}
 
 	return 0;

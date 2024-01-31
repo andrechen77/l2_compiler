@@ -500,7 +500,7 @@ namespace L2::parser {
 			>
 		{};
 
-		struct SpillFunctionRule : 
+		struct SpillFunctionRule :
 			interleaved<
 				LineSeparatorsWithCommentsRule,
 				FunctionRule,
@@ -515,7 +515,7 @@ namespace L2::parser {
 				LineSeparatorsWithCommentsRule
 			>
 		{};
-		
+
 
 		struct ProgramRule :
 			seq<
@@ -950,7 +950,8 @@ namespace L2::parser {
 			}
 
 			auto p = node_processor::convert_program_rule((*root)[0]);
-			p->get_scope().ensure_no_frees();
+			p->get_scope().fake_bind_frees(); // If you want to allow unbound name
+			// p->get_scope().ensure_no_frees(); // If you want to error on unbound name
 			return p;
 		}
 		exit(1);

@@ -235,7 +235,7 @@ namespace L2::program {
 	}
 
 	std::string to_string(ComparisonOperator op){
-		static const std::string arr[] = {"<=", "<", "="};
+		static const std::string arr[] = {"<", "<=", "="};
 		return arr[static_cast<int>(op)];
 	}
 
@@ -346,11 +346,26 @@ namespace L2::program {
 
 	void AggregateScope::fake_bind_frees() {
 		// intentional memory leak
-		this->variable_scope.fake_bind_frees(new Variable("FAKE_VARIABLE"));
-		this->register_scope.fake_bind_frees(new Register("FAKE_REGISTER", false, false, false, -1));
-		this->label_scope.fake_bind_frees(new InstructionLabel *(new InstructionLabel("FAKE_LABEL")));
-		this->l2_function_scope.fake_bind_frees(new L2Function *(new L2Function("FAKE_L2_FUNCTION", 0)));
-		this->external_function_scope.fake_bind_frees(new ExternalFunction *(new ExternalFunction("FAKE_EXTERNAL_FUNCTION", 0, false)));
+		for (std::string name : this->variable_scope.get_free_names()) {
+			this->variable_scope.resolve_item(name, Variable(name));
+		}
+		for (std::string name : this->register_scope.get_free_names()) {
+			this->register_scope.resolve_item(name, Register(name, false, false, false, -1));
+		}
+		for (std::string name : this->label_scope.get_free_names()) {
+			this->label_scope.resolve_item(name, new InstructionLabel(name));
+		}
+		for (std::string name : this->l2_function_scope.get_free_names()) {
+			this->l2_function_scope.resolve_item(name, new L2Function(name, 0));
+		}
+		for (std::string name : this->external_function_scope.get_free_names()) {
+			this->external_function_scope.resolve_item(name, new ExternalFunction(name, 0, false));
+		}
+		// this->variable_scope.fake_bind_frees(new Variable("FAKE_VARIABLE"));
+		// this->register_scope.fake_bind_frees(new Register("FAKE_REGISTER", false, false, false, -1));
+		// this->label_scope.fake_bind_frees(new InstructionLabel *(new InstructionLabel("FAKE_LABEL")));
+		// this->l2_function_scope.fake_bind_frees(new L2Function *(new L2Function("FAKE_L2_FUNCTION", 0)));
+		// this->external_function_scope.fake_bind_frees(new ExternalFunction *(new ExternalFunction("FAKE_EXTERNAL_FUNCTION", 0, false)));
 	}
 
 	std::string Variable::to_string() const {
@@ -490,5 +505,5 @@ namespace L2::program {
 		for (std::unique_ptr<ExternalFunction> &fn : generate_std_functions()) {
 			program.add_external_function(std::move(fn));
 		}
-	}	
+	}
 }

@@ -5,15 +5,16 @@
 #include <algorithm>
 
 namespace L2::program::spiller {
+	static int prefix_count = 0;
 
 	class ExprReplaceVisitor : public ExprVisitor {
 		private:
 		std::string replace;
-		Variable *target;
+		const Variable *target;
 		AggregateScope &agg_scope;
-		
+
 		public:
-		ExprReplaceVisitor(AggregateScope &agg_scope, std::string replace, Variable* target): 
+		ExprReplaceVisitor(AggregateScope &agg_scope, std::string replace, const Variable* target):
 			replace{replace},
 			target {target},
 			agg_scope {agg_scope}
@@ -38,19 +39,17 @@ namespace L2::program::spiller {
 	class InstructionSpiller : public InstructionVisitor {
 		private:
 		L2Function &function;
-		Variable *var;
+		const Variable *var;
 		std::string prefix;
-		int prefix_count;
 		int num_calls;
 		int index;
 		Register *rsp;
 
 		public:
-		InstructionSpiller(L2Function &function, Variable *var, std::string prefix, int num_calls):
-			function {function}, 
-			var {var}, 
+		InstructionSpiller(L2Function &function, const Variable *var, std::string prefix, int num_calls):
+			function {function},
+			var {var},
 			prefix {prefix},
-			prefix_count{0}, 
 			index {0},
 			num_calls {num_calls}
 		{
@@ -81,11 +80,12 @@ namespace L2::program::spiller {
 				read_dest_update = inst.destination->get_vars_on_read();
 			}
 			bool read_dest_update_count = read_dest_update.count(var) > 0;
-			
+
 			if (write_dest_count || read_source_count || read_dest_count || read_dest_update_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
+				var_ptr->spillable = false;
 				inst.source->accept(v);
 				inst.destination->accept(v);
 
@@ -133,6 +133,7 @@ namespace L2::program::spiller {
 			if (write_dest_count || read_lhs_count || read_rhs_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
+				var_ptr->spillable = false;
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 				inst.lhs->accept(v);
 				inst.rhs->accept(v);
@@ -179,6 +180,7 @@ namespace L2::program::spiller {
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
+				var_ptr->spillable = false;
 				inst.lhs->accept(v);
 				inst.rhs->accept(v);
 				if (read_lhs_count || read_rhs_count){
@@ -214,6 +216,7 @@ namespace L2::program::spiller {
 			if (read_callee_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
+				var_ptr->spillable = false;
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 				inst.callee->accept(v);
 				function.insert_instruction(
@@ -245,6 +248,7 @@ namespace L2::program::spiller {
 			if (write_dest_count || read_dest_count || read_base_count || read_offset_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
+				var_ptr->spillable = false;
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 				inst.destination->accept(v);
 				inst.base->accept(v);
@@ -285,18 +289,26 @@ namespace L2::program::spiller {
 		int get_index(){ return index; }
 	};
 
-	void spill(L2Function &function, Variable *var, std::string prefix, int spill_calls){
-		L2Function &function_test = function;
-		InstructionSpiller spiller(function_test, var, prefix, spill_calls);
+	void spill(L2Function &function, const Variable *var, std::string prefix, int spill_calls){
+		std::cerr << "SPILLING " << var->name << " as " << prefix << "\n";
+		if (!var->spillable) {
+			return;
+		}
+		InstructionSpiller spiller(function, var, prefix, spill_calls);
 		while (spiller.get_index() < function.instructions.size()){
 			function.instructions[spiller.get_index()]->accept(spiller);
+		}
+	}
+	void spill_all(L2Function &function, std::string prefix){
+		for (const Variable *var : function.agg_scope.variable_scope.get_all_items()) {
+			spill(function, var, prefix);
 		}
 	}
 
 	std::string printDaSpiller(L2Function &function, int spill_calls){
 		std::string sol = "(@" + function.get_name() + "\n";
 		sol += "\t" + std::to_string(function.get_num_arguments());
-		sol += " " + std::to_string(spill_calls);
+		sol += " " + std::to_string(spill_calls) + "\n";
 		for (const auto &inst : function.instructions) {
 			sol += "\t" + inst->to_string() + "\n";
 		}

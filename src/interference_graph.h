@@ -199,6 +199,15 @@ namespace L2::program::analyze {
 			}
 		}
 
+		// assumes that every node is colored
+		std::map<Node, Color> get_coloring() const {
+			std::map<Node, Color> result;
+			for (const NodeInfo &node_info : this->data) {
+				result.insert(std::make_pair(node_info.node, *node_info.color));
+			}
+			return result;
+		}
+
 		std::string to_string() const {
 			std::string result;
 			for (const NodeInfo &node_info : this->data) {
