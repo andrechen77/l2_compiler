@@ -18,6 +18,24 @@ namespace L2::program {
 	class Scope;
 	struct AggregateScope;
 
+	struct RegisterRef;
+	struct NumberLiteral;
+	struct StackArg;
+	struct MemoryLocation;
+	struct LabelRef;
+	struct VariableRef;
+
+	class ExprVisitor {
+		public:
+
+		virtual void visit(RegisterRef &expr) = 0;
+		virtual void visit(NumberLiteral &expr) = 0;
+		virtual void visit(StackArg &expr) = 0;
+		virtual void visit(MemoryLocation &expr) = 0;
+		virtual void visit(LabelRef &expr) = 0;
+		virtual void visit(VariableRef &expr) = 0;
+	};
+
 	class Expr {
 		public:
 
@@ -32,6 +50,7 @@ namespace L2::program {
 			return {};
 		}
 		virtual void bind_all(AggregateScope &agg_scope) {}
+		virtual void accept(ExprVisitor &v) = 0;
 	};
 
 	class RegisterRef : public Expr {
@@ -51,6 +70,8 @@ namespace L2::program {
 		virtual void bind_all(AggregateScope &agg_scope) override;
 		void bind(Register *referent);
 		Register *get_referent() const { return this->referent; }
+		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
+		
 	};
 
 	struct NumberLiteral : Expr {
@@ -59,6 +80,8 @@ namespace L2::program {
 		NumberLiteral(int64_t value) : value {value} {}
 
 		virtual std::string to_string() const override;
+		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
+
 	};
 
 	struct StackArg : Expr {
@@ -67,6 +90,8 @@ namespace L2::program {
 		StackArg(std::unique_ptr<NumberLiteral> &&stack_num) : stack_num {std::move(stack_num)} {}
 
 		virtual std::string to_string() const override;
+		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
+
 	};
 
 	struct MemoryLocation : Expr {
@@ -81,6 +106,7 @@ namespace L2::program {
 		virtual utils::set<Variable *> get_vars_on_read() const override;
 		virtual utils::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
+		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
 	};
 
 	struct InstructionLabel;
@@ -99,6 +125,7 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
 		InstructionLabel *get_referent() const { return *this->referent; }
+		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
 	};
 
 	class VariableRef : public Expr {
@@ -113,6 +140,7 @@ namespace L2::program {
 
 		// VariableRefs *must* be bound before the passed-in string_view becomes invalid
 		VariableRef(const std::string_view &free_name);
+		VariableRef(const std::string free_name): free_name{free_name}{}
 		VariableRef(Variable *referent);
 
 		void bind(Variable *referent);
@@ -122,6 +150,7 @@ namespace L2::program {
 		virtual utils::set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
 		Variable *get_referent() const { return this->referent; }
+		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
 	};
 
 	struct L2Function;
@@ -601,6 +630,7 @@ namespace L2::program {
 		L2Function(const std::string_view &name, int64_t num_arguments);
 
 		void add_instruction(std::unique_ptr<Instruction> &&inst);
+		void insert_instruction(int index, std::unique_ptr<Instruction> &&inst);
 		void bind_all(AggregateScope &agg_scope);
 		virtual std::string to_string() const override;
 		bool get_never_returns() const override;

@@ -142,6 +142,7 @@ namespace L2::program {
 	utils::set<Variable *> VariableRef::get_vars_on_read() const {
 		return {this->referent};
 	}
+
 	utils::set<Variable *> VariableRef::get_vars_on_write(bool get_read_vars) const {
 		if (get_read_vars) {
 			return {};
@@ -388,6 +389,12 @@ namespace L2::program {
 		inst->bind_all(this->agg_scope);
 		this->instructions.push_back(std::move(inst));
 	}
+
+	void L2Function::insert_instruction(int index, std::unique_ptr<Instruction> &&inst){
+		inst->bind_all(this->agg_scope);
+		this->instructions.insert(this->instructions.begin() + index, std::move(inst));
+	}
+
 
 	void L2Function::bind_all(AggregateScope &agg_scope) {
 		this->agg_scope.set_parent(agg_scope);
