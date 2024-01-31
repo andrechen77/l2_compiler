@@ -53,43 +53,29 @@ namespace L2::program::analyze {
 		}
 	};
 
-	void pre_color_registers(VariableGraph &graph, RegisterScope &register_scope) {
-		static const std::vector<std::string> register_order = {
-			"rax", "rdi", "rsi", "rdx", "rcx",
-			"r8", "r9", "r10", "r11", "r12",
-			"r13", "r14", "r15", "rbx", "rbp"
-		};
-
-		VariableGraph::Color next_color = 0;
-		for (const std::string &reg_name : register_order) {
-			if (std::optional<Register *> reg = register_scope.get_item_maybe(reg_name); reg) {
-				graph.attempt_enable_with_color(*reg, next_color);
-				next_color += 1;
-			}
+	void pre_color_registers(VariableGraph &graph, const std::vector<const Register *> &register_color_table) {
+		for (VariableGraph::Color color = 0; color < register_color_table.size(); ++color) {
+			graph.attempt_enable_with_color(register_color_table[color], color);
 		}
 	}
 
 	VariableGraph generate_interference_graph(
 		L2Function &l2_function,
-		const InstructionsAnalysisResult &inst_analysis
+		const InstructionsAnalysisResult &inst_analysis,
+		const std::vector<const Register *> &register_color_table
 	) {
 		// TODO this will probably be more than necessary until we delete
 		// spilled variables from the scope
 		std::vector<VariableGraph::Node> total_vars = l2_function.agg_scope.variable_scope.get_all_items();
-		utils::set<const Register *> non_rsp_registers;
-		for (const Register *reg : l2_function.agg_scope.register_scope.get_all_items()) {
-			if (reg->name != "rsp") {
-				total_vars.push_back(reg);
-				non_rsp_registers.insert(reg);
-			}
-		}
+		total_vars.insert(total_vars.end(), register_color_table.begin(), register_color_table.end());
+		utils::set<const Register *> non_rsp_registers(register_color_table.begin(), register_color_table.end());
 
 		VariableGraph result(total_vars);
 		result.add_total_bipartite(
 			(utils::set<VariableGraph::Node> &)non_rsp_registers, // I'm so sure these casts are safe... it's a set<derived> being passed into a CONST REF to set<base> ffs
 			(utils::set<VariableGraph::Node> &)non_rsp_registers
 		);
-		pre_color_registers(result, l2_function.agg_scope.register_scope);
+		pre_color_registers(result, register_color_table);
 
 		SirrInstVisitor sirr_inst_visitor(result, non_rsp_registers);
 
@@ -168,12 +154,15 @@ namespace L2::program::analyze {
 		return {};
 	}
 
-	std::vector<VariableGraph::Node> attempt_color_graph(VariableGraph &graph, int num_colors) {
+	std::vector<VariableGraph::Node> attempt_color_graph(
+		VariableGraph &graph,
+		const std::vector<const Register *> &register_color_table
+	) {
 		std::vector<VariableGraph::Node> spilled;
 		std::stack<VariableGraph::Node> removed_vars;
 
 		std::optional<VariableGraph::Node> to_remove;
-		while (to_remove = determine_variable_to_remove(graph, num_colors)) {
+		while (to_remove = determine_variable_to_remove(graph, register_color_table.size())) {
 			removed_vars.push(*to_remove);
 			graph.disable_node(*to_remove);
 		}
@@ -183,7 +172,7 @@ namespace L2::program::analyze {
 			removed_vars.pop();
 			// std::cerr << "replacing node " << top_var->to_string() << "\n";
 
-			std::optional<VariableGraph::Color> color = determine_replacement_color(graph, num_colors, top_var);
+			std::optional<VariableGraph::Color> color = determine_replacement_color(graph, register_color_table.size(), top_var);
 			if (color) {
 				// add the node back with a color
 				// std::cerr << "adding back with color " << *color << "\n";

@@ -202,20 +202,20 @@ namespace L2::program::analyze {
 		std::string to_string() const {
 			std::string result;
 			for (const NodeInfo &node_info : this->data) {
-				if (node_info.is_enabled) {
-					result += "[";
-				} else {
-					result += "-";
-				}
-				result += node_info.node->to_string() + " " + std::to_string(node_info.degree) + " ";
+				// if (node_info.is_enabled) {
+				// 	result += "[";
+				// } else {
+				// 	result += "-";
+				// }
+				result += node_info.node->to_string() + " " /* + std::to_string(node_info.degree) + " " */;
 				for (std::size_t neighbor_index : node_info.adj_vec) {
-					if (this->data[neighbor_index].is_enabled) {
-						result += "[";
-					}
+					// if (this->data[neighbor_index].is_enabled) {
+					// 	result += "[";
+					// }
 					result += this->data[neighbor_index].node->to_string();
-					if (this->data[neighbor_index].is_enabled) {
-						result += "]";
-					}
+					// if (this->data[neighbor_index].is_enabled) {
+					// 	result += "]";
+					// }
 					result += " ";
 				}
 				result += "\n";
@@ -228,12 +228,16 @@ namespace L2::program::analyze {
 
 	VariableGraph generate_interference_graph(
 		L2Function &l2_function,
-		const InstructionsAnalysisResult &inst_analysis
+		const InstructionsAnalysisResult &inst_analysis,
+		const std::vector<const Register *> &register_color_table
 	);
 
 	// Given a GoloringGraph, tries to color it with the colors 0..num_colors.
 	// Pre-colored nodes are allowed.
 	// Returns none if it could color the graph,
 	// else returns a vector of the Variables that could not be colored.
-	std::vector<VariableGraph::Node> attempt_color_graph(VariableGraph &graph, int num_colors);
+	std::vector<VariableGraph::Node> attempt_color_graph(
+		VariableGraph &graph,
+		const std::vector<const Register *> &register_color_table
+	);
 }

@@ -106,7 +106,11 @@ int main(
 			= L2::program::analyze::analyze_instructions(*f);
 
 		// Analyze results
-		L2::program::analyze::VariableGraph graph = generate_interference_graph(*f, liveness_results);
+		L2::program::analyze::VariableGraph graph = generate_interference_graph(
+			*f,
+			liveness_results,
+			L2::program::analyze::create_register_color_table(f->agg_scope.register_scope)
+		);
 
 		// Print the results
 		std::cout << graph.to_string() << std::endl;
