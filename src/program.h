@@ -75,7 +75,7 @@ namespace L2::program {
 		void bind(Register *referent);
 		Register *get_referent() const { return this->referent; }
 		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
-		
+
 	};
 
 	struct NumberLiteral : Expr {
@@ -144,7 +144,6 @@ namespace L2::program {
 
 		// VariableRefs *must* be bound before the passed-in string_view becomes invalid
 		VariableRef(const std::string_view &free_name);
-		VariableRef(const std::string free_name): free_name{free_name}{}
 		VariableRef(Variable *referent);
 
 		void bind(Variable *referent);
@@ -661,6 +660,15 @@ namespace L2::program {
 		L2Function *get_l2_function(int index);
 	};
 
+	struct SpillProgram {
+		std::unique_ptr<Program> program;
+		Variable *var;
+		std::string prefix;
+
+		SpillProgram(std::unique_ptr<Program> program, Variable *var, std::string prefix):
+			program {std::move(program)}, var {var}, prefix {prefix}
+		{}
+	};
 
 	// TODO we'd probably want something like a register table object that
 	// allows us to look stuff up easier but whatever

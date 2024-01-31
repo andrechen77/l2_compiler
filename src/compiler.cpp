@@ -2,6 +2,7 @@
 #include "liveness.h"
 #include "interference_graph.h"
 #include "register_allocator.h"
+#include "spiller.h"
 #include <string>
 #include <vector>
 #include <utility>
@@ -79,7 +80,12 @@ int main(
 	std::unique_ptr<L2::program::Program> p;
 	if (spill_only) {
 		// Parse an L2 function and the spill arguments.
-		p = L2::parser::parse_spill_file(argv[optind]);
+		std::unique_ptr<L2::program::SpillProgram> spillprogram = L2::parser::parse_spill_file(argv[optind]);
+		L2::program::L2Function *f = spillprogram->program->get_l2_function(0);
+		std::string prefix = spillprogram->prefix;
+		L2::program::Variable* var = spillprogram->var;
+		L2::program::spiller::spill(*f, var, prefix);
+		std::cout << L2::program::spiller::printDaSpiller(*f, 1) << std::endl;
 	} else if (liveness_only) {
 		// Parse an L2 function.
 		p = L2::parser::parse_function_file(argv[optind]);
@@ -119,7 +125,6 @@ int main(
 		/*
 		 * Spill.
 		 */
-		//TODO
 
 		/*
 		 * Dump the L2 code.

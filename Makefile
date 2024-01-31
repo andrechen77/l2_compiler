@@ -15,6 +15,10 @@ INTERP        		:= bin/$(PL_CLASS)i
 OPT_LEVEL         :=
 CC_CLASS					:= $(PL_CLASS)c
 
+
+spiller: compiler
+	./L2c -s my_tests/spillerTest.L2 > result.txt
+
 runc: compiler
 	-./L2c -p graph.txt my_tests/scratch.L2
 	dot -Tsvg -o graph.svg graph.txt

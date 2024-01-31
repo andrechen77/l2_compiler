@@ -490,6 +490,5 @@ namespace L2::program {
 		for (std::unique_ptr<ExternalFunction> &fn : generate_std_functions()) {
 			program.add_external_function(std::move(fn));
 		}
-	}
-
+	}	
 }

@@ -3,6 +3,6 @@
 
 namespace L2::program::spiller {
 
-    void spill(Function &function, Variable *var, Variable *prefix);
-    void printDaSpiller();
+    void spill(L2Function &function, Variable *var, std::string prefix, int spill_calls=0);
+    std::string printDaSpiller(L2Function &function, int spill_calls=0);
 }

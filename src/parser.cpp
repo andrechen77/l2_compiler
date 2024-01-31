@@ -970,11 +970,33 @@ namespace L2::parser {
 		}
 		return {};
 	}
-	std::unique_ptr<Program> parse_spill_file(char *fileName) {
+
+	std::unique_ptr<SpillProgram> parse_spill_file(char *fileName) {
 		pegtl::file_input<> fileInput(fileName);
 		auto root = pegtl::parse_tree::parse<pegtl::must<rules::SpillFunctionRule>, ParseNode, rules::Selector>(fileInput);
-
-		exit(1);
+		if (root) {
+			auto function = node_processor::make_l2_function((*root)[0][0]);
+			auto program = std::make_unique<Program>(
+				std::make_unique<L2FunctionRef>(function->get_name())
+			);
+			add_predefined_registers_and_std(*program);
+			program->add_l2_function(std::move(function));
+			program->get_scope().fake_bind_frees();
+			std::string_view var_string_view = (*root)[0][1].string_view();
+			std::string_view prefix_view = (*root)[0][2].string_view();
+			std::string var_string = std::string(var_string_view);
+			std::string prefix_string = std::string(prefix_view);
+			var_string = var_string.substr(1);
+			std::string prefix = prefix_string.substr(1);
+			Variable *var = program->get_l2_function(0)->agg_scope.variable_scope.get_item_or_create(var_string);
+			std::unique_ptr<SpillProgram> spillProgram = std::make_unique<SpillProgram>(
+				std::move(program),
+				var,
+				prefix
+			);
+			return spillProgram;
+		}
+		return {};
 	}
 }
 

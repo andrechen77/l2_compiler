@@ -73,7 +73,7 @@ namespace L2::program::spiller {
 			bool write_dest_count = write_dest.count(var) > 0;
 			std::set<Variable *, std::less<void>> read_source = inst.source->get_vars_on_read();
 			bool read_source_count = read_source.count(var) > 0;
-			std::set<Variable *, std::less<void>> read_dest = inst.source->get_vars_on_write(true);
+			std::set<Variable *, std::less<void>> read_dest = inst.destination->get_vars_on_write(true);
 			bool read_dest_count = read_dest.count(var) > 0;
 			std::set<Variable *, std::less<void>> read_dest_update;
 			if (inst.op != AssignOperator::pure) {
@@ -82,10 +82,10 @@ namespace L2::program::spiller {
 			}
 			bool read_dest_update_count = read_dest_update.count(var) > 0;
 			
-			
 			if (write_dest_count || read_source_count || read_dest_count || read_dest_update_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
+				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
 				inst.source->accept(v);
 				inst.destination->accept(v);
 
@@ -95,11 +95,11 @@ namespace L2::program::spiller {
 						index,
 						std::make_unique<InstructionAssignment>(
 							AssignOperator::pure,
-							std::make_unique<VariableRef>(prefix + std::to_string(prefix_count)),
 							std::make_unique<MemoryLocation>(
 								std::make_unique<RegisterRef>(this->rsp),
 								std::make_unique<NumberLiteral>(num_calls * 8)
-							)
+							),
+							std::make_unique<VariableRef>(var_ptr)
 						)
 					);
 					index++;
@@ -110,11 +110,11 @@ namespace L2::program::spiller {
 						index,
 						std::make_unique<InstructionAssignment>(
 							AssignOperator::pure,
+							std::make_unique<VariableRef>(var_ptr),
 							std::make_unique<MemoryLocation>(
 								std::make_unique<RegisterRef>(this->rsp),
 								std::make_unique<NumberLiteral>(num_calls * 8)
-							),
-							std::make_unique<VariableRef>(prefix + std::to_string(prefix_count))
+							)
 						)
 					);
 				}
@@ -132,6 +132,7 @@ namespace L2::program::spiller {
 			bool read_rhs_count = read_rhs.count(var) > 0;
 			if (write_dest_count || read_lhs_count || read_rhs_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
+				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 				inst.lhs->accept(v);
 				inst.rhs->accept(v);
@@ -141,11 +142,11 @@ namespace L2::program::spiller {
 						index,
 						std::make_unique<InstructionAssignment>(
 							AssignOperator::pure,
-							std::make_unique<VariableRef>(prefix + std::to_string(prefix_count)),
 							std::make_unique<MemoryLocation>(
 								std::make_unique<RegisterRef>(this->rsp),
 								std::make_unique<NumberLiteral>(num_calls * 8)
-							)
+							),
+							std::make_unique<VariableRef>(var_ptr)
 						)
 					);
 					index++;
@@ -156,14 +157,15 @@ namespace L2::program::spiller {
 						index,
 						std::make_unique<InstructionAssignment>(
 							AssignOperator::pure,
+							std::make_unique<VariableRef>(var_ptr),
 							std::make_unique<MemoryLocation>(
 								std::make_unique<RegisterRef>(this->rsp),
 								std::make_unique<NumberLiteral>(num_calls * 8)
-							),
-							std::make_unique<VariableRef>(prefix + std::to_string(prefix_count))
+							)
 						)
 					);
 				}
+				prefix_count++;
 			}
 			index++;
 		}
@@ -176,6 +178,7 @@ namespace L2::program::spiller {
 			if (read_lhs_count || read_rhs_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
+				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
 				inst.lhs->accept(v);
 				inst.rhs->accept(v);
 				if (read_lhs_count || read_rhs_count){
@@ -183,15 +186,16 @@ namespace L2::program::spiller {
 						index,
 						std::make_unique<InstructionAssignment>(
 							AssignOperator::pure,
-							std::make_unique<VariableRef>(prefix + std::to_string(prefix_count)),
 							std::make_unique<MemoryLocation>(
 								std::make_unique<RegisterRef>(this->rsp),
 								std::make_unique<NumberLiteral>(num_calls * 8)
-							)
+							),
+							std::make_unique<VariableRef>(var_ptr)
 						)
 					);
 					index++;
 				}
+				prefix_count++;
 			}
 			++index;
 		}
@@ -209,20 +213,22 @@ namespace L2::program::spiller {
 			bool read_callee_count = read_callee.count(var) > 0;
 			if (read_callee_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
+				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 				inst.callee->accept(v);
 				function.insert_instruction(
 						index,
 						std::make_unique<InstructionAssignment>(
 							AssignOperator::pure,
-							std::make_unique<VariableRef>(prefix + std::to_string(prefix_count)),
 							std::make_unique<MemoryLocation>(
 								std::make_unique<RegisterRef>(this->rsp),
 								std::make_unique<NumberLiteral>(num_calls * 8)
-							)
+							),
+							std::make_unique<VariableRef>(var_ptr)
 						)
 					);
-					index++;
+				index++;
+				prefix_count++;
 			}
 			index++;
 		}
@@ -238,6 +244,7 @@ namespace L2::program::spiller {
 			bool read_offset_count = read_offset.count(var) > 0;
 			if (write_dest_count || read_dest_count || read_base_count || read_offset_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
+				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 				inst.destination->accept(v);
 				inst.base->accept(v);
@@ -247,11 +254,11 @@ namespace L2::program::spiller {
 						index,
 						std::make_unique<InstructionAssignment>(
 							AssignOperator::pure,
-							std::make_unique<VariableRef>(prefix + std::to_string(prefix_count)),
 							std::make_unique<MemoryLocation>(
 								std::make_unique<RegisterRef>(this->rsp),
 								std::make_unique<NumberLiteral>(num_calls * 8)
-							)
+							),
+							std::make_unique<VariableRef>(var_ptr)
 						)
 					);
 					index++;
@@ -262,14 +269,15 @@ namespace L2::program::spiller {
 						index,
 						std::make_unique<InstructionAssignment>(
 							AssignOperator::pure,
+							std::make_unique<VariableRef>(var_ptr),
 							std::make_unique<MemoryLocation>(
 								std::make_unique<RegisterRef>(this->rsp),
 								std::make_unique<NumberLiteral>(num_calls * 8)
-							),
-							std::make_unique<VariableRef>(prefix + std::to_string(prefix_count))
+							)
 						)
 					);
 				}
+				prefix_count++;
 			}
 			++index;
 		}
@@ -277,16 +285,22 @@ namespace L2::program::spiller {
 		int get_index(){ return index; }
 	};
 
-	void spill(L2Function &function, Variable *var, std::string prefix, int spill_calls=0){
+	void spill(L2Function &function, Variable *var, std::string prefix, int spill_calls){
 		L2Function &function_test = function;
 		InstructionSpiller spiller(function_test, var, prefix, spill_calls);
 		while (spiller.get_index() < function.instructions.size()){
 			function.instructions[spiller.get_index()]->accept(spiller);
 		}
-		
 	}
 
-	void printDaSpiller(){
-
+	std::string printDaSpiller(L2Function &function, int spill_calls){
+		std::string sol = "(@" + function.get_name() + "\n";
+		sol += "\t" + std::to_string(function.get_num_arguments());
+		sol += " " + std::to_string(spill_calls);
+		for (const auto &inst : function.instructions) {
+			sol += "\t" + inst->to_string() + "\n";
+		}
+		sol += ")\n";
+		return sol;
 	}
 }
