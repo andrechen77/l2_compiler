@@ -31,6 +31,8 @@ namespace L2::program::spiller {
 				expr.bind(agg_scope.variable_scope.get_item_or_create(replace));
 			}
 		}
+		virtual void visit(L2FunctionRef &expr) {}
+		virtual void visit(ExternalFunctionRef &expr) {}
 	};
 
 	class InstructionSpiller : public InstructionVisitor {

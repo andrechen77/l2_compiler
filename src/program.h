@@ -24,6 +24,8 @@ namespace L2::program {
 	struct MemoryLocation;
 	struct LabelRef;
 	struct VariableRef;
+	struct L2FunctionRef;
+	struct ExternalFunctionRef;
 
 	class ExprVisitor {
 		public:
@@ -34,6 +36,8 @@ namespace L2::program {
 		virtual void visit(MemoryLocation &expr) = 0;
 		virtual void visit(LabelRef &expr) = 0;
 		virtual void visit(VariableRef &expr) = 0;
+		virtual void visit(L2FunctionRef &expr) = 0;
+		virtual void visit(ExternalFunctionRef &expr) = 0;
 	};
 
 	class Expr {
@@ -170,6 +174,7 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
 		L2Function *get_referent() const { return *this->referent; }
+		virtual void accept(ExprVisitor &v) override {};
 	};
 
 	class ExternalFunctionRef : public Expr {
@@ -186,6 +191,7 @@ namespace L2::program {
 		virtual std::string to_string() const override;
 		virtual void bind_all(AggregateScope &agg_scope) override;
 		ExternalFunction *get_referent() const { return *this->referent; }
+		virtual void accept(ExprVisitor &v) override {};
 	};
 
 	struct InstructionReturn;
