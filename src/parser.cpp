@@ -500,12 +500,22 @@ namespace L2::parser {
 			>
 		{};
 
+		struct SpillFunctionRule : 
+			interleaved<
+				LineSeparatorsWithCommentsRule,
+				FunctionRule,
+				VariableRule,
+				VariableRule
+			>
+		{};
+
 		struct FunctionsRule :
 			list<
 				FunctionRule,
 				LineSeparatorsWithCommentsRule
 			>
 		{};
+		
 
 		struct ProgramRule :
 			seq<
@@ -561,6 +571,7 @@ namespace L2::parser {
 				InstructionLeaRule,
 				InstructionsRule,
 				FunctionRule,
+				SpillFunctionRule,
 				FunctionsRule,
 				ProgramRule
 			>
@@ -960,6 +971,9 @@ namespace L2::parser {
 		return {};
 	}
 	std::unique_ptr<Program> parse_spill_file(char *fileName) {
+		pegtl::file_input<> fileInput(fileName);
+		auto root = pegtl::parse_tree::parse<pegtl::must<rules::SpillFunctionRule>, ParseNode, rules::Selector>(fileInput);
+
 		exit(1);
 	}
 }
