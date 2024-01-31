@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "liveness.h"
 #include "interference_graph.h"
+#include "register_allocator.h"
 #include <string>
 #include <vector>
 #include <utility>
@@ -99,7 +100,7 @@ int main(
 			= L2::program::analyze::analyze_instructions(*f);
 
 		// Analyze results
-		L2::program::analyze::ColoringGraph<const L2::program::Variable *> graph = generate_interference_graph(f, liveness_results);
+		L2::program::analyze::VariableGraph graph = generate_interference_graph(*f, liveness_results);
 
 		// Print the results
 		std::cout << graph.to_string() << std::endl;
@@ -107,6 +108,7 @@ int main(
 	} else {
 		// Parse the L2 program.
 		p = L2::parser::parse_file(argv[optind], parse_tree_output);
+		L2::program::analyze::allocate_and_spill(*p->get_l2_function(0));
 	}
 
 	/*

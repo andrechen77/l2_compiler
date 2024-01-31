@@ -11,30 +11,30 @@
 
 namespace L2::program::analyze {
 
-	// does not explicitly prohibit self-edges, but if a node has a color, then
-	// it cannot connect to itself
-	template<typename Node>
+	// Prevents self-edges; attempts to create them will be ignored.
+	template<typename N>
 	class ColoringGraph {
 		public:
 
+		using Node = N;
 		using Edge = bool;
 		using Color = int;
-
-		private:
-
 		struct NodeInfo {
 			Node node;
-			std::vector<std::size_t> adj_vec;
+			std::vector<std::size_t> adj_vec; // includes disabled nodes
 			std::optional<Color> color;
-			bool is_enabled = false;
+			int degree = 0; // only counts enabled nodes
+			bool is_enabled = true;
 		};
+
+		private:
 
 		std::map<Node, std::size_t> node_map;
 		std::vector<NodeInfo> data;
 
 		public:
 
-		ColoringGraph(std::vector<Node> nodes) : node_map {}, data {} {
+		ColoringGraph(const std::vector<Node> &nodes) : node_map {}, data {} {
 			this->data.resize(nodes.size());
 			for (std::size_t i = 0; i < nodes.size(); ++i) {
 				this->node_map.insert(std::make_pair(nodes[i], i));
@@ -42,9 +42,16 @@ namespace L2::program::analyze {
 			}
 		}
 
-		std::optional<Color> get_color(Node node) const {
+		const std::map<Node, std::size_t> &get_node_map() const {
+			return this->node_map;
+		}
+
+		const NodeInfo &get_node_info(Node node) const {
 			std::size_t u = this->node_map.at(node);
-			return this->data[u].color;
+			return this->get_node_info(u);
+		}
+		const NodeInfo &get_node_info(std::size_t u) const {
+			return this->data[u];
 		}
 
 		// Checks whether two nodes conflict. Both must be enabled for them to
@@ -54,7 +61,7 @@ namespace L2::program::analyze {
 			std::size_t v = this->node_map.at(node_b);
 			return this->check_color_conflict(u, v);
 		}
-		bool check_color_conflict(std::size_t u, std::size_t v) {
+		bool check_color_conflict(std::size_t u, std::size_t v) const {
 			auto &u_info = this->data[u];
 			auto &v_info = this->data[v];
 			return u_info.is_enabled && v_info.is_enabled
@@ -67,7 +74,7 @@ namespace L2::program::analyze {
 			std::size_t u = this->node_map.at(node);
 			return this->check_color_conflict(u);
 		}
-		bool check_color_conflict(std::size_t u) {
+		bool check_color_conflict(std::size_t u) const {
 			if (!this->data[u].is_enabled) {
 				return false;
 			}
@@ -86,28 +93,38 @@ namespace L2::program::analyze {
 			return this->add_edge(u, v);
 		}
 		void add_edge(std::size_t u, std::size_t v) {
+			if (u == v) {
+				return;
+			}
 			if (this->check_color_conflict(u, v)) {
 				std::cerr << "Cannot add an edge between two nodes of the same color\n";
 				exit(1);
 			}
+
+			NodeInfo &u_info = this->data[u];
+			NodeInfo &v_info = this->data[v];
 			const auto [ui, uj] = std::equal_range(
-				this->data[u].adj_vec.begin(),
-				this->data[u].adj_vec.end(),
+				u_info.adj_vec.begin(),
+				u_info.adj_vec.end(),
 				v
 			);
 			if (ui == uj) {
 				// u's adj list does not have v
-				this->data[u].adj_vec.insert(ui, v);
+				u_info.adj_vec.insert(ui, v);
+				if (v_info.is_enabled) {
+					u_info.degree += 1;
+				}
 
-				// by symmetry, v's adj list must not have u
-				if (u != v) {
-					const auto [vi, vj] = std::equal_range(
-						this->data[v].adj_vec.begin(),
-						this->data[v].adj_vec.end(),
-						u
-					);
-					assert(vi == vj);
-					this->data[v].adj_vec.insert(vi, u);
+				// since u != v, by symmetry, v's adj list must not have u
+				const auto [vi, vj] = std::equal_range(
+					v_info.adj_vec.begin(),
+					v_info.adj_vec.end(),
+					u
+				);
+				assert(vi == vj);
+				v_info.adj_vec.insert(vi, u);
+				if (u_info.is_enabled) {
+					v_info.degree += 1;
 				}
 			}
 		}
@@ -134,12 +151,72 @@ namespace L2::program::analyze {
 			}
 		}
 
+		// bool get_edge(Node u, Node v) const {
+		// 	assert(u < this->node_map.size() && v < this->node_map.size());
+		// 	auto &[u_adj_vec, u_enabled] = this->data[u];
+		// 	return this->data[v].enabled
+		// 		&& u_enabled
+		// 		&& std::binary_search(u_adj_vec.begin(), u_adj_vec.end(), v);
+		// }
+
+		void disable_node(Node node) {
+			std::size_t u = this->node_map.at(node);
+			if (!this->data[u].is_enabled) {
+				return;
+			}
+
+			this->data[u].is_enabled = false;
+			for (std::size_t neighbor_idx : this->data[u].adj_vec) {
+				this->data[neighbor_idx].degree -= 1;
+			}
+		}
+
+		// Enables a node with the specified color.
+		// Will error if there are any color conflicts.
+		void attempt_enable_with_color(Node node, std::optional<Color> color) {
+			std::size_t u = this->node_map.at(node);
+			NodeInfo &node_info = this->data[u];
+			bool prev_enabled = node_info.is_enabled;
+			node_info.color = color;
+			node_info.is_enabled = true;
+			if (this->check_color_conflict(u)) {
+				std::cerr << "Error: attempted to give a node a color that conflicts.\n";
+				exit(1);
+			}
+			if (!prev_enabled) {
+				for (std::size_t neighbor_idx : node_info.adj_vec) {
+					this->data[neighbor_idx].degree += 1;
+				}
+			}
+		}
+
+		void verify_no_conflicts() const {
+			for (std::size_t i = 0; i < this->data.size(); ++i) {
+				if (this->check_color_conflict(i)) {
+					std::cerr << "Error: color conflict\n";
+					exit(1);
+				}
+			}
+		}
+
 		std::string to_string() const {
 			std::string result;
 			for (const NodeInfo &node_info : this->data) {
-				result += node_info.node->to_string() + " ";
+				if (node_info.is_enabled) {
+					result += "[";
+				} else {
+					result += "-";
+				}
+				result += node_info.node->to_string() + " " + std::to_string(node_info.degree) + " ";
 				for (std::size_t neighbor_index : node_info.adj_vec) {
-					result += this->data[neighbor_index].node->to_string() + " ";
+					if (this->data[neighbor_index].is_enabled) {
+						result += "[";
+					}
+					result += this->data[neighbor_index].node->to_string();
+					if (this->data[neighbor_index].is_enabled) {
+						result += "]";
+					}
+					result += " ";
 				}
 				result += "\n";
 			}
@@ -147,8 +224,16 @@ namespace L2::program::analyze {
 		}
 	};
 
-	ColoringGraph<const Variable *> generate_interference_graph(
-		const L2Function *l2_function,
+	using VariableGraph = ColoringGraph<const Variable *>;
+
+	VariableGraph generate_interference_graph(
+		L2Function &l2_function,
 		const InstructionsAnalysisResult &inst_analysis
 	);
+
+	// Given a GoloringGraph, tries to color it with the colors 0..num_colors.
+	// Pre-colored nodes are allowed.
+	// Returns none if it could color the graph,
+	// else returns a vector of the Variables that could not be colored.
+	std::vector<VariableGraph::Node> attempt_color_graph(VariableGraph &graph, int num_colors);
 }

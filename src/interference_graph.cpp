@@ -1,5 +1,6 @@
 #include "interference_graph.h"
 #include "program.h"
+#include <stack>
 
 namespace L2::program::analyze {
 	template<typename D, typename S>
@@ -12,12 +13,12 @@ namespace L2::program::analyze {
 	class SirrInstVisitor : public InstructionVisitor {
 		private:
 
-		ColoringGraph<const Variable *> &target; // the graph to which the restrictions will be added
+		VariableGraph &target; // the graph to which the restrictions will be added
 		utils::set<const Register *> non_rcx_registers;
 
 		public:
 
-		SirrInstVisitor(ColoringGraph<const Variable *> &target, utils::set<const Register *> non_rsp_registers) :
+		SirrInstVisitor(VariableGraph &target, utils::set<const Register *> non_rsp_registers) :
 			target {target}, non_rcx_registers(non_rsp_registers.begin(), non_rsp_registers.end())
 		{
 			for (auto it = this->non_rcx_registers.begin(); it != this->non_rcx_registers.end(); ++it) {
@@ -37,8 +38,8 @@ namespace L2::program::analyze {
 		virtual void visit(InstructionLeaq &inst) {}
 		virtual void visit(InstructionAssignment &inst) {
 			if (inst.op == AssignOperator::lshift || inst.op == AssignOperator::rshift) {
-				for (const Variable *read_var : inst.source->get_vars_on_read()) {
-					for (const Variable *reg : this->non_rcx_registers) {
+				for (VariableGraph::Node read_var : inst.source->get_vars_on_read()) {
+					for (VariableGraph::Node reg : this->non_rcx_registers) {
 						this->target.add_edge(read_var, reg);
 					}
 				}
@@ -52,28 +53,45 @@ namespace L2::program::analyze {
 		}
 	};
 
-	ColoringGraph<const Variable *> generate_interference_graph(
-		const L2Function *l2_function,
+	void pre_color_registers(VariableGraph &graph, RegisterScope &register_scope) {
+		static const std::vector<std::string> register_order = {
+			"rax", "rdi", "rsi", "rdx", "rcx",
+			"r8", "r9", "r10", "r11", "r12",
+			"r13", "r14", "r15", "rbx", "rbp"
+		};
+
+		VariableGraph::Color next_color = 0;
+		for (const std::string &reg_name : register_order) {
+			if (std::optional<Register *> reg = register_scope.get_item_maybe(reg_name); reg) {
+				graph.attempt_enable_with_color(*reg, next_color);
+				next_color += 1;
+			}
+		}
+	}
+
+	VariableGraph generate_interference_graph(
+		L2Function &l2_function,
 		const InstructionsAnalysisResult &inst_analysis
 	) {
 		// TODO this will probably be more than necessary until we delete
 		// spilled variables from the scope
-		std::vector<const Variable *> total_vars = l2_function->agg_scope.variable_scope.get_all_items();
+		std::vector<VariableGraph::Node> total_vars = l2_function.agg_scope.variable_scope.get_all_items();
 		utils::set<const Register *> non_rsp_registers;
-		for (const Register *reg : l2_function->agg_scope.register_scope.get_all_items()) {
+		for (const Register *reg : l2_function.agg_scope.register_scope.get_all_items()) {
 			if (reg->name != "rsp") {
 				total_vars.push_back(reg);
 				non_rsp_registers.insert(reg);
 			}
 		}
 
-		ColoringGraph<const Variable *> result(total_vars);
+		VariableGraph result(total_vars);
 		result.add_total_bipartite(
-			(utils::set<const Variable *> &)non_rsp_registers, // I'm so sure these casts are safe... it's a set<derived> being passed into a CONST REF to set<base> ffs
-			(utils::set<const Variable *> &)non_rsp_registers
+			(utils::set<VariableGraph::Node> &)non_rsp_registers, // I'm so sure these casts are safe... it's a set<derived> being passed into a CONST REF to set<base> ffs
+			(utils::set<VariableGraph::Node> &)non_rsp_registers
 		);
+		pre_color_registers(result, l2_function.agg_scope.register_scope);
 
-		SirrInstVisitor sirr_inst_visitor(result, std::move(non_rsp_registers));
+		SirrInstVisitor sirr_inst_visitor(result, non_rsp_registers);
 
 		for (const auto &[inst_ptr, inst_analysis_result] : inst_analysis) {
 			// add the in_set of this instruction to the graph
@@ -94,5 +112,90 @@ namespace L2::program::analyze {
 			inst_ptr->accept(sirr_inst_visitor);
 		}
 		return result;
+	}
+
+	std::optional<VariableGraph::Node> determine_variable_to_remove(VariableGraph &graph, int num_colors) {
+		// contains the Variable * with the highest degree strictly less than num_colors
+		std::pair<VariableGraph::Node, int> most_under_max = std::make_pair(nullptr, 0);
+		// contains the Variable * with the highest degree overall
+		std::pair<VariableGraph::Node, int> most_overall = std::make_pair(nullptr, 0);
+
+		for (const auto &[node, i] : graph.get_node_map()) {
+			const VariableGraph::NodeInfo &node_info = graph.get_node_info(i);
+			if (!node_info.is_enabled || node_info.color) {
+				continue;
+			}
+			// for the degree comparison, use >= just in case 0 is the max
+			int degree = node_info.degree;
+			if (degree < num_colors && degree >= most_under_max.second) {
+				most_under_max = std::make_pair(node, degree);
+			}
+			if (degree >= most_overall.second) {
+				most_overall = std::make_pair(node, degree);
+			}
+		}
+
+		if (most_under_max.first != nullptr) {
+			return std::make_optional(most_under_max.first);
+		} else {
+			if (most_overall.first != nullptr) {
+				return std::make_optional(most_overall.first);
+			} else {
+				return {};
+			}
+		}
+	}
+
+	std::optional<VariableGraph::Color> determine_replacement_color(VariableGraph &graph, int num_colors, VariableGraph::Node var) {
+		// std::cerr << "finding replacement color for " << var->to_string() << "\n";
+		std::vector<bool> color_allowed(num_colors, true);
+		for (std::size_t neighbor_idx : graph.get_node_info(var).adj_vec) {
+			const VariableGraph::NodeInfo &neighbor_info = graph.get_node_info(neighbor_idx);
+			// std::cerr << "neighbor " << neighbor_info.node->to_string();
+			if (auto color = neighbor_info.color; neighbor_info.is_enabled && color) {
+				// std::cerr << " with color " << *color;
+				color_allowed[*color] = false;
+			} else {
+				// std::cerr << "!";
+			}
+			// std::cerr << "\n";
+		}
+		for (VariableGraph::Color color_cand = 0; color_cand < num_colors; ++color_cand) {
+			if (color_allowed[color_cand]) {
+				return std::make_optional(color_cand);
+			}
+		}
+		return {};
+	}
+
+	std::vector<VariableGraph::Node> attempt_color_graph(VariableGraph &graph, int num_colors) {
+		std::vector<VariableGraph::Node> spilled;
+		std::stack<VariableGraph::Node> removed_vars;
+
+		std::optional<VariableGraph::Node> to_remove;
+		while (to_remove = determine_variable_to_remove(graph, num_colors)) {
+			removed_vars.push(*to_remove);
+			graph.disable_node(*to_remove);
+		}
+
+		while (!removed_vars.empty()) {
+			VariableGraph::Node top_var = removed_vars.top();
+			removed_vars.pop();
+			// std::cerr << "replacing node " << top_var->to_string() << "\n";
+
+			std::optional<VariableGraph::Color> color = determine_replacement_color(graph, num_colors, top_var);
+			if (color) {
+				// add the node back with a color
+				// std::cerr << "adding back with color " << *color << "\n";
+				graph.attempt_enable_with_color(top_var, color);
+			} else {
+				// gotta spill it
+				graph.attempt_enable_with_color(top_var, {});
+				spilled.push_back(top_var);
+			}
+		}
+		graph.verify_no_conflicts();
+
+		return spilled;
 	}
 }
