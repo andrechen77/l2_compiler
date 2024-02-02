@@ -85,8 +85,9 @@ int main(
 		L2::program::L2Function *f = spillprogram->program->get_l2_function(0);
 		std::string prefix = spillprogram->prefix;
 		L2::program::Variable* var = spillprogram->var;
-		L2::program::spiller::spill(*f, var, prefix);
-		std::cout << L2::program::spiller::printDaSpiller(*f, 1) << std::endl;
+		L2::program::spiller::Spiller spill_man(*f, prefix);
+		spill_man.spill(var);
+		std::cout << spill_man.printDaSpiller() << std::endl;
 		return 0;
 	} else if (liveness_only) {
 		// Parse an L2 function.

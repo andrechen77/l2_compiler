@@ -5,7 +5,6 @@
 #include <algorithm>
 
 namespace L2::program::spiller {
-	static int prefix_count = 0;
 
 	class ExprReplaceVisitor : public ExprVisitor {
 		private:
@@ -42,15 +41,17 @@ namespace L2::program::spiller {
 		const Variable *var;
 		std::string prefix;
 		int num_calls;
+		int prefix_count;
 		int index;
 		Register *rsp;
 
 		public:
-		InstructionSpiller(L2Function &function, const Variable *var, std::string prefix, int num_calls):
+		InstructionSpiller(L2Function &function, const Variable *var, std::string prefix, int prefix_count, int num_calls):
 			function {function},
 			var {var},
 			prefix {prefix},
 			index {0},
+			prefix_count {prefix_count},
 			num_calls {num_calls}
 		{
 			auto maybe_rsp = this->function.agg_scope.register_scope.get_item_maybe("rsp");
@@ -63,10 +64,12 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionReturn &inst) override {
+			std::cerr << "spilling an return instruction" << std::endl;
 			index++;
 		}
 
 		virtual void visit(InstructionAssignment &inst) override {
+			std::cerr << "spilling an assignment instruction" << std::endl;
 			// find if the source uses var
 			std::set<Variable *, std::less<void>> write_dest = inst.destination->get_vars_on_write(false);
 			bool write_dest_count = write_dest.count(var) > 0;
@@ -124,6 +127,7 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionCompareAssignment &inst) override {
+			std::cerr << "spilling an compare instruction" << std::endl;
 			std::set<Variable *, std::less<void>> write_dest = inst.destination->get_vars_on_write(false);
 			bool write_dest_count = write_dest.count(var) > 0;
 			std::set<Variable *, std::less<void>> read_lhs = inst.lhs->get_vars_on_read();
@@ -172,6 +176,7 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionCompareJump &inst) override {
+			std::cerr << "spilling an jump instruction" << std::endl;
 			std::set<Variable *, std::less<void>> read_lhs = inst.lhs->get_vars_on_read();
 			bool read_lhs_count = read_lhs.count(var) > 0;
 			std::set<Variable *, std::less<void>> read_rhs = inst.rhs->get_vars_on_read();
@@ -203,14 +208,17 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionLabel &inst) override {
+			std::cerr << "spilling an label instruction" << std::endl;
 			index++;
 		}
 
 		virtual void visit(InstructionGoto &inst) override {
+			std::cerr << "spilling an goto instruction" << std::endl;
 			++index;
 		}
 
 		virtual void visit(InstructionCall &inst) override {
+			std::cerr << "spilling an call instruction" << std::endl;
 			std::set<Variable *, std::less<void>> read_callee = inst.callee->get_vars_on_read();
 			bool read_callee_count = read_callee.count(var) > 0;
 			if (read_callee_count){
@@ -237,19 +245,24 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionLeaq &inst) override {
-			std::set<Variable *, std::less<void>> write_dest = inst.destination->get_vars_on_read();
+			std::cerr << "spilling an leaq instruction" << std::endl;
+			std::set<Variable *, std::less<void>> write_dest = inst.destination->get_vars_on_write(false);
 			bool write_dest_count = write_dest.count(var) > 0;
 			std::set<Variable *, std::less<void>> read_dest = inst.destination->get_vars_on_write(true);
 			bool read_dest_count = read_dest.count(var) > 0;
-			std::set<Variable *, std::less<void>> read_base = inst.base->get_vars_on_write(true);
+			std::set<Variable *, std::less<void>> read_base = inst.base->get_vars_on_read();
 			bool read_base_count = read_base.count(var) > 0;
-			std::set<Variable *, std::less<void>> read_offset = inst.offset->get_vars_on_write(true);
+			std::set<Variable *, std::less<void>> read_offset = inst.offset->get_vars_on_read();
 			bool read_offset_count = read_offset.count(var) > 0;
 			if (write_dest_count || read_dest_count || read_base_count || read_offset_count){
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
 				var_ptr->spillable = false;
+				std::cerr << "instruction looks like: " << inst.to_string() << std::endl;
+				std::cerr << "var_ptr name: " << var_ptr->to_string() << std::endl;
+				std::cerr << "var name: " << var->to_string() << std::endl;
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
+
 				inst.destination->accept(v);
 				inst.base->accept(v);
 				inst.offset->accept(v);
@@ -288,24 +301,38 @@ namespace L2::program::spiller {
 
 		int get_index(){ return index; }
 	};
+	
+	int get_next_prefix(L2Function &l2_function, std::string prefix, int start) {
+		while (true) {
+			std::string next = prefix + std::to_string(start);
+			std::optional<program::Variable *> maybe_var = l2_function.agg_scope.variable_scope.get_item_maybe(next);
+			if (!maybe_var) {
+				return start;
+			}
+			start++;
+		}
+	}
 
-	void spill(L2Function &function, const Variable *var, std::string prefix, int spill_calls){
+	void Spiller::spill(const Variable *var){
 		std::cerr << "SPILLING " << var->name << " as " << prefix << "\n";
 		if (!var->spillable) {
 			return;
 		}
-		InstructionSpiller spiller(function, var, prefix, spill_calls);
-		while (spiller.get_index() < function.instructions.size()){
-			function.instructions[spiller.get_index()]->accept(spiller);
+		prefix_count = get_next_prefix(function, prefix, prefix_count);
+		InstructionSpiller inst_spiller(function, var, prefix, prefix_count, spill_calls);
+		while (inst_spiller.get_index() < function.instructions.size()){
+			function.instructions[inst_spiller.get_index()]->accept(inst_spiller);
 		}
+		spill_calls++;
 	}
-	void spill_all(L2Function &function, std::string prefix){
+
+	void Spiller::spill_all(){
 		for (const Variable *var : function.agg_scope.variable_scope.get_all_items()) {
-			spill(function, var, prefix);
+			spill(var);
 		}
 	}
 
-	std::string printDaSpiller(L2Function &function, int spill_calls){
+	std::string Spiller::printDaSpiller(){
 		std::string sol = "(@" + function.get_name() + "\n";
 		sol += "\t" + std::to_string(function.get_num_arguments());
 		sol += " " + std::to_string(spill_calls) + "\n";

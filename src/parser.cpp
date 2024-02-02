@@ -839,6 +839,10 @@ namespace L2::parser {
 
 		std::unique_ptr<InstructionLeaq> convert_instruction_lea_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::InstructionLeaRule));
+			// std::cout << "instLeaq thingies: " << make_expr(n[0])->to_string();
+			// std::cout << " " << make_expr(n[1])->to_string();
+			// std::cout << " " << make_expr(n[2])->to_string();
+			// std::cout << " " << make_expr(n[3])->to_string() << "\n";
 			return std::make_unique<InstructionLeaq>(
 				make_expr(n[0]),
 				make_expr(n[1]),
@@ -891,7 +895,9 @@ namespace L2::parser {
 			} else if (rule == typeid(rules::InstructionDecrementRule)) {
 				return convert_instruction_decrement_rule(n);
 			} else if (rule == typeid(rules::InstructionLeaRule)) {
-				return convert_instruction_lea_rule(n);
+				auto x = convert_instruction_lea_rule(n);
+				std::cout << "KEVIN POGGGER" << x->to_string() << std::endl;
+				return x;
 			} else {
 				std::cerr << "Cannot make Instruction from this parse node.";
 				exit(1);
@@ -908,7 +914,9 @@ namespace L2::parser {
 			const ParseNode &instructions_rule = n[2];
 			assert(*instructions_rule.rule == typeid(rules::InstructionsRule));
 			for (const auto &child : instructions_rule.children) {
-				function->add_instruction(make_instruction(*child));
+				auto inst_thing = make_instruction(*child);
+				std::cout << "INSTRUCTION: " << inst_thing->to_string() << std::endl;
+				function->add_instruction(std::move(inst_thing));
 			}
 			return function;
 		}
@@ -977,12 +985,16 @@ namespace L2::parser {
 		auto root = pegtl::parse_tree::parse<pegtl::must<rules::SpillFunctionRule>, ParseNode, rules::Selector>(fileInput);
 		if (root) {
 			auto function = node_processor::make_l2_function((*root)[0][0]);
+			std::cout << "INCOMING function\n" << function->to_string() << std::endl;
+			std::cout << "\n\n\n" << std::endl;
 			auto program = std::make_unique<Program>(
 				std::make_unique<L2FunctionRef>(function->get_name())
 			);
 			add_predefined_registers_and_std(*program);
 			program->add_l2_function(std::move(function));
 			program->get_scope().fake_bind_frees();
+			std::cout << "INCOMING PROgram\n" << program->to_string() << std::endl;
+			std::cout << "\n\n\n" << std::endl;
 			std::string_view var_string_view = (*root)[0][1].string_view();
 			std::string_view prefix_view = (*root)[0][2].string_view();
 			std::string var_string = std::string(var_string_view);

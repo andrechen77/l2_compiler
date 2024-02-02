@@ -3,7 +3,23 @@
 
 namespace L2::program::spiller {
 
-    void spill(L2Function &function, const Variable *var, std::string prefix, int spill_calls=0);
-	void spill_all(L2Function &function, std::string prefix);
-    std::string printDaSpiller(L2Function &function, int spill_calls=1);
+    class Spiller {
+        private:
+        program::L2Function &function;
+        std::string prefix;
+        int prefix_count;
+        int spill_calls;
+
+        public:
+        Spiller(program::L2Function &function, std::string prefix):
+            function {function},
+            prefix {prefix},
+            prefix_count {0},
+            spill_calls {0}
+        {};
+
+        void spill(const Variable *var);
+        void spill_all();
+        std::string printDaSpiller();
+    };
 }

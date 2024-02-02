@@ -304,7 +304,7 @@ namespace L2::program {
 
 	std::string InstructionLeaq::to_string() const {
 		return this->destination->to_string() + " @ " + this->base->to_string()
-			+ " " + this->base->to_string() + " " + std::to_string(this->scale);
+			+ " " + this->offset->to_string() + " " + std::to_string(this->scale);
 	}
 
 	void InstructionLeaq::bind_all(AggregateScope &agg_scope) {
