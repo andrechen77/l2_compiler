@@ -122,10 +122,10 @@ int main(
 		// Parse the L2 program.
 		p = L2::parser::parse_file(argv[optind], parse_tree_output);
 		auto mp = L2::program::analyze::allocate_and_spill_with_backup(*p->get_l2_function(0));
-		std::cout << p->to_string();
-		for (const auto [key, value] : mp) {
-			std::cout << key->to_string() << ": " << value->to_string() << "\n";
-		}
+		// std::cout << p->to_string();
+		// for (const auto [key, value] : mp) {
+		// 	std::cout << key->to_string() << ": " << value->to_string() << "\n";
+		// }
 	}
 
 	// /*
@@ -158,9 +158,7 @@ int main(
 	//  */
 
 	if (enable_code_generator) {
-		// std::cerr << p->to_string();
 		L2::code_gen::generate_code(*p);
-		// std::cerr << p->to_string();
 	}
 
 	return 0;

@@ -395,10 +395,6 @@ namespace L2::program {
 			offset {std::move(offset)},
 			scale {scale}
 		{
-			std::cout << "instLeaq thingies: " << this->destination->to_string();
-			std::cout << " " << this->base->to_string();
-			std::cout << " " << this->offset->to_string();
-			std::cout << " " << std::to_string(this->scale) << "\n";
 		}
 		// InstructionLeaq(const InstructionLeaq &other) :
 		// 	destination {std::make_unique<Expr>(*other.destination)},

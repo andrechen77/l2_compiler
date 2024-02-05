@@ -64,12 +64,10 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionReturn &inst) override {
-			std::cerr << "spilling an return instruction" << std::endl;
 			index++;
 		}
 
 		virtual void visit(InstructionAssignment &inst) override {
-			std::cerr << "spilling an assignment instruction" << std::endl;
 			// find if the source uses var
 			std::set<Variable *, std::less<void>> write_dest = inst.destination->get_vars_on_write(false);
 			bool write_dest_count = write_dest.count(var) > 0;
@@ -127,7 +125,6 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionCompareAssignment &inst) override {
-			std::cerr << "spilling an compare instruction" << std::endl;
 			std::set<Variable *, std::less<void>> write_dest = inst.destination->get_vars_on_write(false);
 			bool write_dest_count = write_dest.count(var) > 0;
 			std::set<Variable *, std::less<void>> read_lhs = inst.lhs->get_vars_on_read();
@@ -176,7 +173,6 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionCompareJump &inst) override {
-			std::cerr << "spilling an jump instruction" << std::endl;
 			std::set<Variable *, std::less<void>> read_lhs = inst.lhs->get_vars_on_read();
 			bool read_lhs_count = read_lhs.count(var) > 0;
 			std::set<Variable *, std::less<void>> read_rhs = inst.rhs->get_vars_on_read();
@@ -208,17 +204,14 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionLabel &inst) override {
-			std::cerr << "spilling an label instruction" << std::endl;
 			index++;
 		}
 
 		virtual void visit(InstructionGoto &inst) override {
-			std::cerr << "spilling an goto instruction" << std::endl;
 			++index;
 		}
 
 		virtual void visit(InstructionCall &inst) override {
-			std::cerr << "spilling an call instruction" << std::endl;
 			std::set<Variable *, std::less<void>> read_callee = inst.callee->get_vars_on_read();
 			bool read_callee_count = read_callee.count(var) > 0;
 			if (read_callee_count){
@@ -245,7 +238,6 @@ namespace L2::program::spiller {
 		}
 
 		virtual void visit(InstructionLeaq &inst) override {
-			std::cerr << "spilling an leaq instruction" << std::endl;
 			std::set<Variable *, std::less<void>> write_dest = inst.destination->get_vars_on_write(false);
 			bool write_dest_count = write_dest.count(var) > 0;
 			std::set<Variable *, std::less<void>> read_dest = inst.destination->get_vars_on_write(true);
@@ -258,9 +250,6 @@ namespace L2::program::spiller {
 				std::string new_var_name = prefix + std::to_string(prefix_count);
 				Variable *var_ptr = function.agg_scope.variable_scope.get_item_or_create(new_var_name);
 				var_ptr->spillable = false;
-				std::cerr << "instruction looks like: " << inst.to_string() << std::endl;
-				std::cerr << "var_ptr name: " << var_ptr->to_string() << std::endl;
-				std::cerr << "var name: " << var->to_string() << std::endl;
 				ExprReplaceVisitor v(function.agg_scope, new_var_name, var);
 
 				inst.destination->accept(v);
@@ -314,10 +303,6 @@ namespace L2::program::spiller {
 	}
 
 	void Spiller::spill(const Variable *var){
-		std::cerr << "SPILLING " << var->name << " as " << prefix << "\n";
-		if (!var->spillable) {
-			return;
-		}
 		prefix_count = get_next_prefix(function, prefix, prefix_count);
 		InstructionSpiller inst_spiller(function, var, prefix, prefix_count, spill_calls);
 		while (inst_spiller.get_index() < function.instructions.size()){

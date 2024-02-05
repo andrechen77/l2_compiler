@@ -75,10 +75,10 @@ namespace L2::program::analyze {
 		program::spiller::Spiller spill_man(l2_function, "S");
 		std::optional<RegAllocMap> normal_attempt = allocate_and_spill(l2_function, spill_man);
 		if (normal_attempt) {
-			std::cerr << "normal attempt was good enough\n";
+			//std::cerr << "normal attempt was good enough\n";
 			return *normal_attempt;
 		}
-		std::cerr << "normal attempt was NOT good enough\n";
+		//std::cerr << "normal attempt was NOT good enough\n";
 
 		// TODO just use a backup copy of the l2_function instead... once you
 		// figure out how to do that

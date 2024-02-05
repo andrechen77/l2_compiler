@@ -144,7 +144,6 @@ namespace L2::code_gen {
 	void generate_code(Program &p){
 		std::ofstream o;
 		o.open("prog.L1");
-		std::cerr << p.to_string() << "\n";
 
 		o << "(@" << p.get_entry_function_ref().get_referent()->get_name() << "\n";
 
